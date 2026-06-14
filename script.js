@@ -522,34 +522,28 @@ function renderChart(timelineData) {
 function generatePDFReport() {
     const targetElement = document.getElementById('pdfSnapshotTarget');
     
-    // 1. Temporarily apply the reset class
-    targetElement.classList.add('pdf-capture-mode');
+    // Add the class to force fixed width
+    targetElement.classList.add('pdf-capture-fix');
 
     const options = {
-        margin: 10,
-        filename: 'EV_Savings_TCO_ReportN.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { 
+        margin:       10,
+        filename:     'EV_Savings_Report.pdf',
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { 
             scale: 2, 
             useCORS: true,
-            // These lines prevent the "crop to the right" issue
-            x: 0,
-            y: 0,
-            scrollX: 0,
-            scrollY: 0,
-            windowWidth: targetElement.scrollWidth,
-            windowHeight: targetElement.scrollHeight
+            windowWidth: 750 // Force the canvas to look at the width of our container
         },
-        jsPDF: { 
+        jsPDF:        { 
             unit: 'mm', 
-            format: [410, 1000], // Long page
+            format: 'a4', 
             orientation: 'portrait' 
-        }
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
 
-    // 2. Generate PDF
+    // Generate, then clean up
     html2pdf().set(options).from(targetElement).save().then(() => {
-        // 3. Remove the class after the PDF is created so the UI returns to normal
-        targetElement.classList.remove('pdf-capture-mode');
+        targetElement.classList.remove('pdf-capture-fix');
     });
 }
