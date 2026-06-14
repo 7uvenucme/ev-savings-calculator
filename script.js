@@ -1,9 +1,7 @@
-// 1. Initialize Supabase Connection
-const SUPABASE_URL = 'https://jwuzpwglpqkohecxkeuf.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3dXpwd2dscHFrb2hlY3hrZXVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNTQ3NTksImV4cCI6MjA5NjkzMDc1OX0.VGST1zYSae2-BHGoq2jXH7qOrPqMHCqR7atibbpd1f8';
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// 2. GLOBAL STATE
 let chart;
 let vehiclesData = [];
 let statesData = [];
@@ -12,7 +10,6 @@ let currentSpreadsheetVehicle = null;
 let isManualValuationMode = false;
 let isMonthlyFreq = false;
 
-// 3. BOOTSTRAP APP
 window.onload = async () => {
     try {
         const { data: states } = await db.from('states').select('*');
@@ -33,16 +30,12 @@ window.onload = async () => {
             });
             populateMakes();
         }
-
         populateCoreDropdowns();
-
     } catch (err) {
         console.error("Database connection error:", err);
-        alert("Failed to connect to database. Please check console.");
     }
 };
 
-// 4. POPULATE DROPDOWNS
 function populateCoreDropdowns() {
     const vSelect = document.getElementById('vehicleSelect');
     const sSelect = document.getElementById('stateSelect');
@@ -50,7 +43,6 @@ function populateCoreDropdowns() {
     vSelect.innerHTML = '<option value="" disabled>Select an eSUV variant...</option>';
     sSelect.innerHTML = '<option value="" disabled>Select state...</option>';
     
-    // Optgroup setup for eSUVs based on product_name
     const groupedVehicles = {};
     vehiclesData.forEach(v => {
         if(!groupedVehicles[v.product_name]) groupedVehicles[v.product_name] = [];
@@ -76,7 +68,6 @@ function populateCoreDropdowns() {
         sSelect.appendChild(option);
     });
 
-    // Defaults
     const defaultStateIndex = Array.from(sSelect.options).findIndex(opt => opt.innerText.includes("Maharashtra"));
     if (defaultStateIndex > -1) sSelect.selectedIndex = defaultStateIndex;
 
@@ -84,26 +75,26 @@ function populateCoreDropdowns() {
     if (defaultVehIndex > -1) vSelect.selectedIndex = defaultVehIndex;
 
     handleVehicleChange();
+    
+    // Set initial display format for raw inputs
+    handleCurrencyBlur('odometerInput', false);
+    handleCurrencyBlur('manualExchangeInput', false);
+    handleCurrencyBlur('downPaymentInput', false);
 }
 
-// 5. INTERACTION LOGIC
 function toggleFrequency() {
     isMonthlyFreq = !isMonthlyFreq;
     const btn = document.getElementById('freqToggleBtn');
     btn.innerText = isMonthlyFreq ? 'monthly' : 'weekly';
-    
-    // Auto adjust reasonable defaults when switching
     const distInput = document.getElementById('distanceNum');
     distInput.value = isMonthlyFreq ? 1500 : 400;
-    
     updateCalculations();
 }
 
 function adjustDistance(direction) {
     const distInput = document.getElementById('distanceNum');
     let current = parseInt(distInput.value) || 0;
-    const step = isMonthlyFreq ? 500 : 50;
-    
+    const step = isMonthlyFreq ? 100 : 50;
     current += (step * direction);
     if (current < 0) current = 0;
     distInput.value = current;
@@ -114,9 +105,8 @@ function selectFuelType(type) {
     document.getElementById('cardDiesel').classList.toggle('selected', type === 'diesel');
     document.getElementById('cardPetrol').classList.toggle('selected', type === 'petrol');
     document.querySelector(`input[name="fuelType"][value="${type}"]`).checked = true;
-    
     document.getElementById('lblSpreadsheetIcePrice').innerText = type === 'petrol' ? 'Petrol Ex-Sh' : 'Diesel Ex-Sh';
-    handleVehicleChange(); // Refetch defaults based on selection
+    handleVehicleChange();
 }
 
 function handleRouteSplitChange() {
@@ -145,15 +135,15 @@ function toggleValuationPath() {
     document.getElementById('dropdownsContainer').classList.toggle('hidden', isManualValuationMode);
     
     const textNode = document.getElementById('exchangeValueText');
-    const inputNode = document.getElementById('manualExchangeInput');
+    const inputWrapper = document.getElementById('manualExchangeWrapper');
     
     if (isManualValuationMode) {
         textNode.classList.add('hidden');
-        inputNode.classList.remove('hidden');
+        inputWrapper.classList.remove('hidden');
         document.getElementById('fallbackToggleBtn').innerText = "Use guided vehicle list selection";
     } else {
         textNode.classList.remove('hidden');
-        inputNode.classList.add('hidden');
+        inputWrapper.classList.add('hidden');
         document.getElementById('fallbackToggleBtn').innerText = "Can't find your car listed? Enter manually";
     }
     updateCalculations();
@@ -163,11 +153,10 @@ function toggleAssumptions() {
     document.getElementById('baselineAccordion').classList.toggle('hidden');
 }
 
-// 6. FORMATTERS & STEPPERS
+// FORMATTERS & STEPPERS
 function formatToLakhsString(number) {
     return "₹ " + (number / 100000).toFixed(2) + " L";
 }
-
 function formatEnIn(number) {
     return "₹ " + parseInt(number).toLocaleString('en-IN');
 }
@@ -189,7 +178,9 @@ function handleCurrencyBlur(inputId, useRs = true) {
 function handleCurrencyInput(inputId, useRs = true) {
     const display = document.getElementById(inputId + 'Display');
     const hidden = document.getElementById(inputId);
-    hidden.value = display.value || 0;
+    // Strips commas and non-numeric chars so user can type freely
+    const rawVal = display.value.replace(/[^0-9]/g, '');
+    hidden.value = rawVal || 0;
     updateCalculations();
 }
 
@@ -203,14 +194,13 @@ function adjustCurrencyStepper(inputId, amount, useRs = true) {
     updateCalculations();
 }
 
-// 7. DATA PIPELINES
+// DATA PIPELINES
 function handleVehicleChange() {
     const selectEl = document.getElementById('vehicleSelect');
     if (!selectEl.value) return;
     
     currentSpreadsheetVehicle = JSON.parse(selectEl.value);
     const fuelType = document.querySelector('input[name="fuelType"]:checked').value;
-    
     const iceExSh = fuelType === 'petrol' ? currentSpreadsheetVehicle.petrol_exsh_comp : currentSpreadsheetVehicle.diesel_exsh_comp;
     
     document.getElementById('overrideIceExPrice').value = iceExSh;
@@ -222,7 +212,6 @@ function handleVehicleChange() {
     updateCalculations();
 }
 
-// Resale Matrix
 function populateMakes() {
     const makeSelect = document.getElementById('makeSelect');
     makeSelect.innerHTML = '<option value="">Select Make</option>';
@@ -258,24 +247,20 @@ function updateYears() {
     updateCalculations();
 }
 
-// 8. CORE ENGINE
+// CORE ENGINE
 function updateCalculations() {
     if (!currentSpreadsheetVehicle) return;
     
-    // Grab State Multipliers
     const stateObj = document.getElementById('stateSelect').value ? JSON.parse(document.getElementById('stateSelect').value) : {overhead_multiplier_ice: 0.20, overhead_multiplier_ev: 0.05};
     
-    // Usage Data
     const distance = parseFloat(document.getElementById('distanceNum').value) || 0;
     const annualMileage = isMonthlyFreq ? distance * 12 : distance * 52;
     const highwaySplit = parseFloat(document.getElementById('routeSplitSlider').value) / 100;
     const citySplit = 1 - highwaySplit;
     
-    // Fuel Toggle
     const fuelType = document.querySelector('input[name="fuelType"]:checked').value;
     const isPetrol = (fuelType === 'petrol');
     
-    // Editable Baselines
     const iceExShowroom = parseFloat(document.getElementById('overrideIceExPrice').value) || 0;
     const evExShowroom = parseFloat(document.getElementById('overrideEvExPrice').value) || 0;
     
@@ -290,7 +275,6 @@ function updateCalculations() {
     let tempEvSvcRate = parseFloat(document.getElementById('varEvSvc').value);
     let tempIceSvcRate = isPetrol ? parseFloat(document.getElementById('varPetrolSvc').value) : parseFloat(document.getElementById('varDieselSvc').value);
 
-    // Day 0 Math
     const blendedUnitCost = (citySplit * homeCharge) + (highwaySplit * publicCharge);
     const iceCostPerKm = (isPetrol ? petrolPrice : dieselPrice) / iceEff;
     const evCostPerKm = blendedUnitCost / evEff;
@@ -317,7 +301,6 @@ function updateCalculations() {
     let totalIceSvcSpent = 0; let totalEvSvcSpent = 0;
     let breakevenYear = null;
 
-    // 7 Year Projection
     for (let year = 1; year <= 7; year++) {
         let yrIceFuel = annualMileage * iceCostPerKm;
         let yrEvEnergy = annualMileage * evCostPerKm;
@@ -386,7 +369,7 @@ function updateCalculations() {
     renderTableAndLedger(timeline, { exShowroomPremium, taxSavings, fuelSavings, serviceSavings, totalCorpTaxSaved, netTcoResult }, breakevenYear);
     renderChart(timeline);
 
-    // EXCHANGE & FINANCE
+    // EXCHANGE & FINANCE LOGIC
     let finalTradeInEquity = 0;
     if (document.getElementById('exchangeCheck').checked) {
         if (isManualValuationMode) {
@@ -398,13 +381,12 @@ function updateCalculations() {
             const kms = parseFloat(document.getElementById('odometerInput').value) || 0;
             if (make && model && year && tradeInDatabase[make]?.[model]?.[year]) {
                 const rule = tradeInDatabase[make][model][year];
-                // Floor at 75k per request
                 finalTradeInEquity = Math.max(75000, rule.baseValue - (kms * rule.penalty));
             }
         }
     }
     
-    document.getElementById('exchangeValueText').innerText = formatToLakhsString(finalTradeInEquity);
+    document.getElementById('exchangeValueText').innerText = formatEnIn(finalTradeInEquity);
 
     const rawDownpaymentAmt = parseFloat(document.getElementById('downPaymentInput').value) || 0;
     const tenureYears = parseInt(document.getElementById('loanTenure').value);
@@ -417,15 +399,15 @@ function updateCalculations() {
     const totalMonths = tenureYears * 12;
     const calculatedMonthlyEMI = evPrincipal > 0 ? (evPrincipal * monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1) : 0;
     
-    const quoteBox = document.getElementById('imaginationQuote');
-    if (evPrincipal <= 0) {
-        quoteBox.innerHTML = `Your down payment and exchange value completely cover the eSUV on-road cost! No financing principal remaining.`;
-    } else {
-        quoteBox.innerHTML = `Based on a loan amount of <strong>${formatToLakhsString(evPrincipal)}</strong> over ${tenureYears} years, your estimated EMI is: <strong>${formatEnIn(Math.round(calculatedMonthlyEMI))}/month</strong>`;
-    }
+    // Render Finance Ledger
+    document.getElementById('financeOnRoadDisp').innerText = formatToLakhsString(evOnRoadTotal);
+    document.getElementById('financeExchangeDisp').innerText = "- " + formatToLakhsString(finalTradeInEquity);
+    document.getElementById('financeDownDisp').innerText = "- " + formatToLakhsString(rawDownpaymentAmt);
+    document.getElementById('financeLoanDisp').innerText = formatToLakhsString(evPrincipal);
+    document.getElementById('financeEmiDisp').innerText = formatEnIn(Math.round(calculatedMonthlyEMI)) + "/month";
 }
 
-// 9. RENDERERS
+// RENDERERS
 function renderTableAndLedger(timeline, ledger, breakevenYear) {
     const tbody = document.getElementById('tcoTableBody');
     tbody.innerHTML = '';
@@ -433,14 +415,19 @@ function renderTableAndLedger(timeline, ledger, breakevenYear) {
         const tr = document.createElement('tr');
         let iceClass = ''; let evClass = ''; let marginText = '';
 
-        if (row.ice < row.ev) {
-            iceClass = 'class="leader-green"';
-            marginText = `Prem ${formatToLakhsString(row.ev - row.ice)}`;
-        } else if (row.ev < row.ice) {
+        if (row.ice > row.ev) {
             evClass = 'class="leader-green"';
-            marginText = `Saves ${formatToLakhsString(row.ice - row.ev)}`;
+            marginText = `<span class="val-positive">Save ${formatToLakhsString(row.ice - row.ev)}</span>`;
+        } else if (row.ev > row.ice) {
+            iceClass = 'class="leader-green"';
+            marginText = `<span class="val-negative">Prem. ${formatToLakhsString(row.ev - row.ice)}</span>`;
         } else {
             marginText = '-';
+        }
+
+        // Apply thick border for Day 0 separation without adding a blank row
+        if (row.isSeparator) {
+            tr.style.borderBottom = "2px solid #9ca3af";
         }
 
         tr.innerHTML = `
@@ -450,13 +437,6 @@ function renderTableAndLedger(timeline, ledger, breakevenYear) {
             <td><strong>${marginText}</strong></td>
         `;
         tbody.appendChild(tr);
-
-        if (row.isSeparator) {
-            const sepTr = document.createElement('tr');
-            sepTr.className = 'time-separator-row';
-            sepTr.innerHTML = `<td colspan="4"></td>`;
-            tbody.appendChild(sepTr);
-        }
     });
 
     const ledgerEx = document.getElementById('ledgerExEx');
@@ -518,34 +498,27 @@ function renderChart(timelineData) {
         }
     });
 }
+
 function generatePDFReport() {
     const targetElement = document.getElementById('pdfSnapshotTarget');
-
-    // 1. Get the real size of the content
-    const width = targetElement.scrollWidth;
-    const height = targetElement.scrollHeight;
+    
+    // Apply desktop wrap fix to prevent clipping
+    targetElement.classList.add('pdf-capture-mode');
 
     const options = {
-        margin: 10,
-        filename: 'EV_Savings_TCO_ReportN.pdf',
+        margin: [10, 10, 10, 10],
+        filename: 'EV_Savings_TCO_Report.pdf',
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { 
             scale: 2, 
             useCORS: true,
-            // These properties ensure we capture the whole scrollable area
-            width: width,
-            height: height,
-            windowWidth: width,
-            windowHeight: height,
-            logging: true // Set to true to see if it's failing in the console
+            windowWidth: 800
         },
-        jsPDF: { 
-            unit: 'mm', 
-            format: 'a4', // Stick to a4, let the library handle the multi-page split
-            orientation: 'portrait' 
-        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
 
-    html2pdf().set(options).from(targetElement).save();
+    html2pdf().set(options).from(targetElement).save().then(() => {
+        targetElement.classList.remove('pdf-capture-mode');
+    });
 }

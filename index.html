@@ -12,302 +12,329 @@
 <body>
 
 <div id="pdfSnapshotTarget" class="app-container">
-    <header>
+    
+    <div class="gradient-header">
         <h1>Mahindra eSUV Savings Calculator</h1>
         <p class="subtitle">Compare the Total Cost Of Ownership EV v/s ICE vehicle basis your driving habits. Tweak the values to do your own research before arriving at a buying decision.</p>
-    </header>
-
-    <div class="section-title">Tell us about your drive</div>
-    
-    <label>Your eSUV of choice</label>
-    <select id="vehicleSelect" onchange="handleVehicleChange()">
-        <option value="" disabled selected>Loading variants...</option>
-    </select>
-
-    <label>Where do you plan to buy?</label>
-    <select id="stateSelect" onchange="updateCalculations()">
-        <option value="" disabled selected>Loading states...</option>
-    </select>
-
-    <label>How much do you drive?</label>
-    <div class="inline-stepper-sentence">
-        I drive
-        <div class="stepper-controls">
-            <button type="button" class="stepper-btn" onclick="adjustDistance(-1)">−</button>
-            <input type="number" id="distanceNum" value="400" oninput="updateCalculations()">
-            <button type="button" class="stepper-btn" onclick="adjustDistance(1)">+</button>
-        </div>
-        km 
-        <button type="button" id="freqToggleBtn" class="capsule-tag" onclick="toggleFrequency()">weekly</button>
     </div>
 
-    <label>Driving Mix</label>
-    <div class="mix-labels">
-        <span id="cityLabel">City: 70%</span>
-        <span id="highwayLabel">Highway: 30%</span>
-    </div>
-    <div class="slider-wrapper">
-        <input type="range" id="routeSplitSlider" min="0" max="100" step="5" value="30" oninput="handleRouteSplitChange()">
-        <div class="slider-teeth"></div>
-    </div>
-
-    <div class="toggle-container" style="margin-top: 1.5rem;">
-        <label class="switch">
-            <input type="checkbox" id="businessPurchaseCheck" onchange="toggleBusinessSection()">
-            <span class="slider round"></span>
-        </label>
-        <div class="toggle-text">
-            <strong>Buying in the name of your Business?</strong>
-            <span>Claim up to 40% depreciation benefits</span>
-        </div>
-    </div>
-
-    <hr class="visual-break">
-
-    <label>Compare against</label>
-    <div class="fuel-card-container">
-        <label class="fuel-choice-card selected" id="cardDiesel">
-            <input type="radio" name="fuelType" value="diesel" class="hidden-radio" checked onchange="selectFuelType('diesel')">
-            <div class="fuel-card-indicator"></div>
-            <span>Diesel vehicle</span>
-        </label>
-        <label class="fuel-choice-card" id="cardPetrol">
-            <input type="radio" name="fuelType" value="petrol" class="hidden-radio" onchange="selectFuelType('petrol')">
-            <div class="fuel-card-indicator"></div>
-            <span>Petrol vehicle</span>
-        </label>
-    </div>
-
-    <div class="section-title">Your savings breakdown</div>
-
-    <div class="table-wrapper">
-        <table class="tco-table">
-            <thead>
-                <tr>
-                    <th style="width:30%">Timeline</th>
-                    <th style="width:23%">ICE</th>
-                    <th style="width:23%">Mahindra eSUV</th>
-                    <th style="width:24%">Difference</th>
-                </tr>
-            </thead>
-            <tbody id="tcoTableBody">
-                <tr><td colspan="4" style="text-align:center;">Calculating...</td></tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="linear-breakdown">
-        <div class="breakdown-row">
-            <span class="row-title">Ex-Showroom Price Premium</span>
-            <span id="ledgerExEx" class="val-negative">₹0</span>
-        </div>
-        <div class="breakdown-row">
-            <span class="row-title">Registration & Road Tax Delta</span>
-            <span id="ledgerTax" class="val-positive">₹0</span>
-        </div>
-        <div class="breakdown-row">
-            <span class="row-title">7-Year Fuel Savings</span>
-            <span id="ledgerFuel" class="val-positive">₹0</span>
-        </div>
-        <div class="breakdown-row">
-            <span class="row-title">7-Year Service Savings</span>
-            <span id="ledgerSvc" class="val-positive">₹0</span>
-        </div>
-        <div class="breakdown-row hidden" id="rowCorporateTax">
-            <span class="row-title">7-Year Corporate Tax Saved</span>
-            <span id="ledgerCorporateTax" class="val-positive">₹0</span>
-        </div>
-        <div class="breakdown-row total-row">
-            <span style="color: var(--midnight-navy); font-size: 1rem;">Total Savings:</span>
-            <span id="ledgerTotal" style="font-size: 1.3rem;">₹0</span>
-        </div>
-    </div>
-
-    <div id="proTipBox" class="pro-tip hidden">
-        💡 <strong>Pro-tip:</strong> Consider buying your Mahindra eSUV before 2nd Oct to claim the full 40% depreciation rate in Year 1!
-    </div>
-
-    <div id="breakevenCard" class="hero-savings hidden">
-        <div class="amount" id="breakevenVal">--</div>
-        <div class="sub-label">Break-even in <span id="breakevenSubtext">--</span></div>
-    </div>
-
-    <div style="margin-bottom: 1.5rem;">
-        <canvas id="tcoChart" style="width: 100%; height: 260px;"></canvas>
-    </div>
-
-    <div class="edit-baselines-box">
-        <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 10px;">Adjust Baseline Ex-Showroom Prices</label>
-        <div class="form-grid">
-            <div>
-                <label id="lblSpreadsheetIcePrice">Diesel Ex-Sh</label>
-                <div class="stepper-input-wrapper">
-                    <input type="text" id="overrideIceExPriceDisplay" onfocus="handleCurrencyFocus('overrideIceExPrice')" onblur="handleCurrencyBlur('overrideIceExPrice')" oninput="handleCurrencyInput('overrideIceExPrice')">
-                    <input type="hidden" id="overrideIceExPrice" value="0">
-                    <div class="stepper-arrows-inline">
-                        <button type="button" onclick="adjustCurrencyStepper('overrideIceExPrice', -25000)">▼</button>
-                        <button type="button" onclick="adjustCurrencyStepper('overrideIceExPrice', 25000)">▲</button>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <label>EV Ex-Sh</label>
-                <div class="stepper-input-wrapper">
-                    <input type="text" id="overrideEvExPriceDisplay" onfocus="handleCurrencyFocus('overrideEvExPrice')" onblur="handleCurrencyBlur('overrideEvExPrice')" oninput="handleCurrencyInput('overrideEvExPrice')">
-                    <input type="hidden" id="overrideEvExPrice" value="0">
-                    <div class="stepper-arrows-inline">
-                        <button type="button" onclick="adjustCurrencyStepper('overrideEvExPrice', -25000)">▼</button>
-                        <button type="button" onclick="adjustCurrencyStepper('overrideEvExPrice', 25000)">▲</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <hr class="visual-break">
-
-    <div class="section-title">Exchange & Finance</div>
-    
-    <label class="exchange-toggle-container">
-        <input type="checkbox" id="exchangeCheck" onchange="toggleExchangeSection()">
-        <span>Exchange your current vehicle (Offset Principal)</span>
-    </label>
-    
-    <div id="exchangeSection" class="hidden finance-block">
-        <div id="matrixEvaluationContainer">
-            <div id="dropdownsContainer">
-                <label>What vehicle do you currently drive?</label>
-                <select id="makeSelect" onchange="updateModels()"><option value="">Select Make</option></select>
-                
-                <div class="form-grid">
-                    <div>
-                        <select id="modelSelect" onchange="updateYears()"><option value="">Select Model</option></select>
-                    </div>
-                    <div>
-                        <select id="yearSelect" onchange="updateCalculations()"><option value="">Year</option></select>
-                    </div>
-                </div>
-
-                <label>km driven</label>
-                <div class="stepper-input-wrapper">
-                    <input type="text" id="odometerDisplay" onfocus="handleCurrencyFocus('odometerInput', false)" onblur="handleCurrencyBlur('odometerInput', false)" oninput="handleCurrencyInput('odometerInput', false)">
-                    <input type="hidden" id="odometerInput" value="100000">
-                    <div class="stepper-arrows-inline">
-                        <button type="button" onclick="adjustCurrencyStepper('odometerInput', -5000, false)">▼</button>
-                        <button type="button" onclick="adjustCurrencyStepper('odometerInput', 5000, false)">▲</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="fallback-toggle-link" id="fallbackToggleBtn" onclick="toggleValuationPath()">Can't find your car listed? Enter manually</div>
-
-        <div class="exchange-value-row">
-            <span class="val-label">Exchange Value:</span>
-            <span id="exchangeValueText" class="val-amount">₹ 0.00 L</span>
-            <input type="number" id="manualExchangeInput" class="val-amount-input hidden" value="350000" oninput="updateCalculations()" placeholder="e.g. 350000">
-        </div>
-    </div>
-
-    <div id="financeSection">
-        <label>Cash Down Payment</label>
-        <div class="stepper-input-wrapper">
-            <input type="text" id="downPaymentDisplay" onfocus="handleCurrencyFocus('downPaymentInput')" onblur="handleCurrencyBlur('downPaymentInput')" oninput="handleCurrencyInput('downPaymentInput')">
-            <input type="hidden" id="downPaymentInput" value="500000">
-            <div class="stepper-arrows-inline">
-                <button type="button" onclick="adjustCurrencyStepper('downPaymentInput', -50000)">▼</button>
-                <button type="button" onclick="adjustCurrencyStepper('downPaymentInput', 50000)">▲</button>
-            </div>
-        </div>
-
-        <div class="form-grid">
-            <div>
-                <label>Financing Tenure</label>
-                <select id="loanTenure" onchange="updateCalculations()">
-                    <option value="3">3 Years</option>
-                    <option value="5" selected>5 Years</option>
-                    <option value="7">7 Years</option>
-                </select>
-            </div>
-            <div>
-                <label>Interest Rate (% p.a.)</label>
-                <select id="interestRate" onchange="updateCalculations()">
-                    <option value="7.5">7.5%</option>
-                    <option value="8.0">8.0%</option>
-                    <option value="8.5">8.5%</option>
-                    <option value="8.75" selected>8.75%</option>
-                    <option value="9.0">9.0%</option>
-                    <option value="9.5">9.5%</option>
-                    <option value="10.0">10.0%</option>
-                </select>
-            </div>
-        </div>
-        <div class="narrative-card" id="imaginationQuote">
-            Waiting for selections...
-        </div>
-    </div>
-
-    <hr class="visual-break">
-
-    <span class="accordion-link" onclick="toggleAssumptions()">⚙️ Fine Tune Your Calculations</span>
-    
-    <div id="baselineAccordion" class="hidden advanced-settings-box">
-        <p class="advanced-title">Change Fuel Prices, Running Costs & More</p>
+    <div class="premium-card">
+        <div class="section-title">Tell us about your drive</div>
         
-        <div class="form-grid hidden" id="corporateTaxContainer">
-            <div style="grid-column: span 2;">
-                <label>Corporate Tax Slab (%)</label>
-                <input type="number" id="corporateTaxRate" value="30" step="1" oninput="updateCalculations()">
+        <label>Your eSUV of choice</label>
+        <select id="vehicleSelect" onchange="handleVehicleChange()">
+            <option value="" disabled selected>Loading variants...</option>
+        </select>
+
+        <label>Where do you plan to buy?</label>
+        <select id="stateSelect" onchange="updateCalculations()">
+            <option value="" disabled selected>Loading states...</option>
+        </select>
+
+        <label>How much do you drive?</label>
+        <div class="inline-stepper-sentence">
+            I drive
+            <div class="stepper-controls">
+                <button type="button" class="stepper-btn" onclick="adjustDistance(-1)">−</button>
+                <input type="number" id="distanceNum" value="400" oninput="updateCalculations()">
+                <button type="button" class="stepper-btn" onclick="adjustDistance(1)">+</button>
             </div>
+            km 
+            <button type="button" id="freqToggleBtn" class="capsule-tag" onclick="toggleFrequency()">weekly</button>
         </div>
 
-        <div class="form-grid">
-            <div>
-                <label>Petrol Cost (₹/L)</label>
-                <input type="number" step="1" id="varPetrolPrice" value="111" oninput="updateCalculations()">
-            </div>
-            <div>
-                <label>Diesel Cost (₹/L)</label>
-                <input type="number" step="1" id="varDieselPrice" value="98" oninput="updateCalculations()">
-            </div>
-            <div>
-                <label>Home Charge (₹/kWh)</label>
-                <input type="number" step="0.5" id="varHomeCharge" value="7.0" oninput="updateCalculations()">
-            </div>
-            <div>
-                <label>Public Charge (₹/kWh)</label>
-                <input type="number" step="0.5" id="varPublicCharge" value="20.0" oninput="updateCalculations()">
-            </div>
-            <div>
-                <label>Petrol Mileage (km/L)</label>
-                <input type="number" step="0.5" id="varPetrolEff" value="14.0" oninput="updateCalculations()">
-            </div>
-            <div>
-                <label>Diesel Mileage (km/L)</label>
-                <input type="number" step="0.5" id="varDieselEff" value="18.0" oninput="updateCalculations()">
-            </div>
-            <div>
-                <label>EV Efficiency (km/kWh)</label>
-                <input type="number" step="0.5" id="varEvEff" value="7.0" oninput="updateCalculations()">
-            </div>
-            <div>
-                <label>EV Svc (₹/km)</label>
-                <input type="number" step="0.01" id="varEvSvc" value="0.06" oninput="updateCalculations()">
-            </div>
-            <div>
-                <label>Petrol Svc (₹/km)</label>
-                <input type="number" step="0.01" id="varPetrolSvc" value="0.50" oninput="updateCalculations()">
-            </div>
-            <div>
-                <label>Diesel Svc (₹/km)</label>
-                <input type="number" step="0.01" id="varDieselSvc" value="0.60" oninput="updateCalculations()">
+        <label>Driving Mix</label>
+        <div class="mix-labels">
+            <span id="cityLabel">City: 70%</span>
+            <span id="highwayLabel">Highway: 30%</span>
+        </div>
+        <div class="slider-wrapper">
+            <input type="range" id="routeSplitSlider" min="0" max="100" step="5" value="30" oninput="handleRouteSplitChange()">
+            <div class="slider-teeth"></div>
+        </div>
+
+        <div class="toggle-container" style="margin-top: 1.5rem;">
+            <label class="switch">
+                <input type="checkbox" id="businessPurchaseCheck" onchange="toggleBusinessSection()">
+                <span class="slider round"></span>
+            </label>
+            <div class="toggle-text">
+                <strong>Buying in the name of your Business?</strong>
+                <span>Claim up to 40% depreciation benefits</span>
             </div>
         </div>
     </div>
 
-    <button class="pdf-download-btn" onclick="generatePDFReport()">
-        📥 Download Comprehensive PDF Report
-    </button>
+    <div class="premium-card">
+        <label>Compare against</label>
+        <div class="fuel-card-container">
+            <label class="fuel-choice-card selected" id="cardDiesel">
+                <input type="radio" name="fuelType" value="diesel" class="hidden-radio" checked onchange="selectFuelType('diesel')">
+                <div class="fuel-card-indicator"></div>
+                <span>Diesel vehicle</span>
+            </label>
+            <label class="fuel-choice-card" id="cardPetrol">
+                <input type="radio" name="fuelType" value="petrol" class="hidden-radio" onchange="selectFuelType('petrol')">
+                <div class="fuel-card-indicator"></div>
+                <span>Petrol vehicle</span>
+            </label>
+        </div>
+
+        <div class="section-title" style="margin-top: 2rem;">Your savings breakdown</div>
+        <div class="table-wrapper">
+            <table class="tco-table">
+                <thead>
+                    <tr>
+                        <th style="width:30%">Timeline</th>
+                        <th style="width:23%">ICE</th>
+                        <th style="width:23%">Mahindra eSUV</th>
+                        <th style="width:24%">Difference</th>
+                    </tr>
+                </thead>
+                <tbody id="tcoTableBody">
+                    <tr><td colspan="4" style="text-align:center;">Calculating...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="linear-breakdown">
+            <div class="breakdown-row">
+                <span class="row-title">Ex-Showroom Price Premium</span>
+                <span id="ledgerExEx" class="val-negative">₹0</span>
+            </div>
+            <div class="breakdown-row">
+                <span class="row-title">Registration & Road Tax Delta</span>
+                <span id="ledgerTax" class="val-positive">₹0</span>
+            </div>
+            <div class="breakdown-row">
+                <span class="row-title">7-Year Fuel Savings</span>
+                <span id="ledgerFuel" class="val-positive">₹0</span>
+            </div>
+            <div class="breakdown-row">
+                <span class="row-title">7-Year Service Savings</span>
+                <span id="ledgerSvc" class="val-positive">₹0</span>
+            </div>
+            <div class="breakdown-row hidden" id="rowCorporateTax">
+                <span class="row-title">7-Year Corporate Tax Saved</span>
+                <span id="ledgerCorporateTax" class="val-positive">₹0</span>
+            </div>
+            <div class="breakdown-row total-row">
+                <span style="color: var(--midnight-navy); font-size: 1rem;">Total Savings:</span>
+                <span id="ledgerTotal" style="font-size: 1.3rem;">₹0</span>
+            </div>
+        </div>
+
+        <div id="proTipBox" class="pro-tip hidden">
+            💡 <strong>Pro-tip:</strong> Consider buying your Mahindra eSUV before 2nd Oct to claim the full 40% depreciation rate in Year 1!
+        </div>
+    </div>
+
+    <div class="premium-card">
+        <div id="breakevenCard" class="hero-savings hidden">
+            <div class="amount" id="breakevenVal">--</div>
+            <div class="sub-label">Break-even in <span id="breakevenSubtext">--</span></div>
+        </div>
+
+        <div style="margin-bottom: 2rem;">
+            <canvas id="tcoChart" style="width: 100%; height: 260px;"></canvas>
+        </div>
+
+        <div class="edit-baselines-box">
+            <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 10px;">Adjust Baseline Ex-Showroom Prices</label>
+            <div class="form-grid">
+                <div>
+                    <label id="lblSpreadsheetIcePrice">Diesel Ex-Sh</label>
+                    <div class="stepper-input-wrapper">
+                        <input type="text" id="overrideIceExPriceDisplay" onfocus="handleCurrencyFocus('overrideIceExPrice')" onblur="handleCurrencyBlur('overrideIceExPrice')" oninput="handleCurrencyInput('overrideIceExPrice')">
+                        <input type="hidden" id="overrideIceExPrice" value="0">
+                        <div class="stepper-arrows-inline">
+                            <button type="button" onclick="adjustCurrencyStepper('overrideIceExPrice', -25000)">▼</button>
+                            <button type="button" onclick="adjustCurrencyStepper('overrideIceExPrice', 25000)">▲</button>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label>EV Ex-Sh</label>
+                    <div class="stepper-input-wrapper">
+                        <input type="text" id="overrideEvExPriceDisplay" onfocus="handleCurrencyFocus('overrideEvExPrice')" onblur="handleCurrencyBlur('overrideEvExPrice')" oninput="handleCurrencyInput('overrideEvExPrice')">
+                        <input type="hidden" id="overrideEvExPrice" value="0">
+                        <div class="stepper-arrows-inline">
+                            <button type="button" onclick="adjustCurrencyStepper('overrideEvExPrice', -25000)">▼</button>
+                            <button type="button" onclick="adjustCurrencyStepper('overrideEvExPrice', 25000)">▲</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="premium-card">
+        <div class="section-title">Exchange & Finance</div>
+        
+        <label class="exchange-toggle-container">
+            <input type="checkbox" id="exchangeCheck" onchange="toggleExchangeSection()">
+            <span>Exchange your current vehicle (Offset Principal)</span>
+        </label>
+        
+        <div id="exchangeSection" class="hidden finance-block">
+            <div id="matrixEvaluationContainer">
+                <div id="dropdownsContainer">
+                    <label>What vehicle do you currently drive?</label>
+                    <select id="makeSelect" onchange="updateModels()"><option value="">Select Make</option></select>
+                    
+                    <div class="form-grid">
+                        <div>
+                            <select id="modelSelect" onchange="updateYears()"><option value="">Select Model</option></select>
+                        </div>
+                        <div>
+                            <select id="yearSelect" onchange="updateCalculations()"><option value="">Year</option></select>
+                        </div>
+                    </div>
+
+                    <label>km driven</label>
+                    <div class="stepper-input-wrapper">
+                        <input type="text" id="odometerInputDisplay" onfocus="handleCurrencyFocus('odometerInput', false)" onblur="handleCurrencyBlur('odometerInput', false)" oninput="handleCurrencyInput('odometerInput', false)">
+                        <input type="hidden" id="odometerInput" value="80000">
+                        <div class="stepper-arrows-inline">
+                            <button type="button" onclick="adjustCurrencyStepper('odometerInput', -10000, false)">▼</button>
+                            <button type="button" onclick="adjustCurrencyStepper('odometerInput', 10000, false)">▲</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fallback-toggle-link" id="fallbackToggleBtn" onclick="toggleValuationPath()">Can't find your car listed? Enter manually</div>
+
+            <div class="exchange-value-row">
+                <span class="val-label">Exchange Value:</span>
+                <span id="exchangeValueText" class="val-amount">₹ 0</span>
+                
+                <div id="manualExchangeWrapper" class="stepper-input-wrapper hidden" style="width: 160px; margin-bottom: 0;">
+                    <input type="text" id="manualExchangeInputDisplay" onfocus="handleCurrencyFocus('manualExchangeInput', false)" onblur="handleCurrencyBlur('manualExchangeInput', false)" oninput="handleCurrencyInput('manualExchangeInput', false)" style="margin-bottom: 0; text-align: right; color: var(--premium-green); font-weight: 800;">
+                    <input type="hidden" id="manualExchangeInput" value="250000">
+                    <div class="stepper-arrows-inline">
+                        <button type="button" onclick="adjustCurrencyStepper('manualExchangeInput', -50000, false)">▼</button>
+                        <button type="button" onclick="adjustCurrencyStepper('manualExchangeInput', 50000, false)">▲</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="financeSection">
+            <label>Cash Down Payment</label>
+            <div class="stepper-input-wrapper">
+                <input type="text" id="downPaymentInputDisplay" onfocus="handleCurrencyFocus('downPaymentInput', false)" onblur="handleCurrencyBlur('downPaymentInput', false)" oninput="handleCurrencyInput('downPaymentInput', false)">
+                <input type="hidden" id="downPaymentInput" value="500000">
+                <div class="stepper-arrows-inline">
+                    <button type="button" onclick="adjustCurrencyStepper('downPaymentInput', -50000, false)">▼</button>
+                    <button type="button" onclick="adjustCurrencyStepper('downPaymentInput', 50000, false)">▲</button>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div>
+                    <label>Financing Tenure</label>
+                    <select id="loanTenure" onchange="updateCalculations()">
+                        <option value="3">3 Years</option>
+                        <option value="5" selected>5 Years</option>
+                        <option value="7">7 Years</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Interest Rate (% p.a.)</label>
+                    <select id="interestRate" onchange="updateCalculations()">
+                        <option value="8.25">8.25%</option>
+                        <option value="8.50">8.50%</option>
+                        <option value="8.75" selected>8.75%</option>
+                        <option value="9.00">9.00%</option>
+                        <option value="9.25">9.25%</option>
+                        <option value="9.50">9.50%</option>
+                        <option value="9.75">9.75%</option>
+                        <option value="10.00">10.00%</option>
+                        <option value="10.25">10.25%</option>
+                        <option value="10.50">10.50%</option>
+                        <option value="10.75">10.75%</option>
+                        <option value="11.00">11.00%</option>
+                        <option value="11.25">11.25%</option>
+                        <option value="11.50">11.50%</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="finance-ledger">
+                <div class="ledger-row"><span>Vehicle On-Road price</span><span id="financeOnRoadDisp">₹0</span></div>
+                <div class="ledger-row"><span style="color: var(--text-secondary)">Exchange value</span><span class="val-negative" id="financeExchangeDisp">- ₹0</span></div>
+                <div class="ledger-row"><span style="color: var(--text-secondary)">Cash down payment</span><span class="val-negative" id="financeDownDisp">- ₹0</span></div>
+                <div class="ledger-row" style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 6px;"><span>Estimated loan amount</span><span id="financeLoanDisp" style="font-weight: 700;">₹0</span></div>
+                <div class="ledger-row total-row" style="background: transparent; border: 1px solid var(--premium-green); margin-top: 10px;">
+                    <span style="font-weight: 600; color: var(--premium-green);">Estimated EMI</span>
+                    <strong id="financeEmiDisp" style="color: var(--premium-green); font-size: 1.15rem;">₹0/month</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="premium-card">
+        <span class="accordion-link" onclick="toggleAssumptions()">⚙️ Fine Tune Your Calculations</span>
+        
+        <div id="baselineAccordion" class="hidden advanced-settings-box">
+            <p class="advanced-title">Change Fuel Prices, Running Costs & More</p>
+            
+            <div class="form-grid hidden" id="corporateTaxContainer">
+                <div style="grid-column: span 2;">
+                    <label>Corporate Tax Slab (%)</label>
+                    <input type="number" id="corporateTaxRate" value="30" step="1" oninput="updateCalculations()">
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div>
+                    <label>Petrol Cost (₹/L)</label>
+                    <input type="number" step="1" id="varPetrolPrice" value="111" oninput="updateCalculations()">
+                </div>
+                <div>
+                    <label>Diesel Cost (₹/L)</label>
+                    <input type="number" step="1" id="varDieselPrice" value="98" oninput="updateCalculations()">
+                </div>
+                <div>
+                    <label>Home Charge (₹/kWh)</label>
+                    <input type="number" step="0.5" id="varHomeCharge" value="7.0" oninput="updateCalculations()">
+                </div>
+                <div>
+                    <label>Public Charge (₹/kWh)</label>
+                    <input type="number" step="0.5" id="varPublicCharge" value="20.0" oninput="updateCalculations()">
+                </div>
+                <div>
+                    <label>Petrol Mileage (km/L)</label>
+                    <input type="number" step="0.5" id="varPetrolEff" value="14.0" oninput="updateCalculations()">
+                </div>
+                <div>
+                    <label>Diesel Mileage (km/L)</label>
+                    <input type="number" step="0.5" id="varDieselEff" value="18.0" oninput="updateCalculations()">
+                </div>
+                <div>
+                    <label>EV Efficiency (km/kWh)</label>
+                    <input type="number" step="0.5" id="varEvEff" value="7.0" oninput="updateCalculations()">
+                </div>
+                <div>
+                    <label>EV Svc (₹/km)</label>
+                    <input type="number" step="0.01" id="varEvSvc" value="0.06" oninput="updateCalculations()">
+                </div>
+                <div>
+                    <label>Petrol Svc (₹/km)</label>
+                    <input type="number" step="0.01" id="varPetrolSvc" value="0.50" oninput="updateCalculations()">
+                </div>
+                <div>
+                    <label>Diesel Svc (₹/km)</label>
+                    <input type="number" step="0.01" id="varDieselSvc" value="0.60" oninput="updateCalculations()">
+                </div>
+            </div>
+        </div>
+
+        <button class="pdf-download-btn" onclick="generatePDFReport()">
+            📥 Download PDF Report
+        </button>
+    </div>
 
     <div class="disclaimer-section">
         <strong>Legal Disclaimers & Assumptions:</strong><br>
