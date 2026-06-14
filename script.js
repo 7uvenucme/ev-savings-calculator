@@ -542,7 +542,7 @@ function generatePDFReport() {
         },
         jsPDF: { 
             unit: 'mm', 
-            format: [210, 2000], // Long page
+            format: [410, 1000], // Long page
             orientation: 'portrait' 
         }
     };
