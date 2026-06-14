@@ -9,23 +9,18 @@ let vehiclesData = [];
 let statesData = [];
 let tradeInDatabase = {};
 let currentSpreadsheetVehicle = null;
-
-// Base configuration limits
-const MAX_WEEKLY_KM = 1200;
-const MAX_MONTHLY_KM = 15000;
+let isManualValuationMode = false;
+let isMonthlyFreq = false;
 
 // 3. BOOTSTRAP APP
 window.onload = async () => {
     try {
-        // Fetch States
         const { data: states } = await db.from('states').select('*');
         if (states) statesData = states;
 
-        // Fetch Vehicles
         const { data: vehicles } = await db.from('vehicles').select('*');
         if (vehicles) vehiclesData = vehicles;
 
-        // Fetch Resale Value matrix and structure it locally for V1 Exchange logic
         const { data: resale } = await db.from('resale_value').select('*');
         if (resale) {
             resale.forEach(row => {
@@ -36,37 +31,44 @@ window.onload = async () => {
                     penalty: row.per_km_depreciation_penalty 
                 };
             });
-            document.getElementById('loadingStatus').classList.add('hidden');
-            document.getElementById('dropdownsContainer').classList.remove('hidden');
             populateMakes();
         }
 
         populateCoreDropdowns();
-        attachEventListeners();
 
     } catch (err) {
         console.error("Database connection error:", err);
-        alert("Failed to load database parameters. Please check your internet connection.");
+        alert("Failed to connect to database. Please check console.");
     }
 };
 
-// 4. UI POPULATION & EVENT LISTENERS
+// 4. POPULATE DROPDOWNS
 function populateCoreDropdowns() {
     const vSelect = document.getElementById('vehicleSelect');
     const sSelect = document.getElementById('stateSelect');
     
-    vSelect.innerHTML = '<option value="" disabled selected>Select an eSUV variant...</option>';
-    sSelect.innerHTML = '<option value="" disabled selected>Select state...</option>';
+    vSelect.innerHTML = '<option value="" disabled>Select an eSUV variant...</option>';
+    sSelect.innerHTML = '<option value="" disabled>Select state...</option>';
     
-    // Sort and populate Vehicles
+    // Optgroup setup for eSUVs based on product_name
+    const groupedVehicles = {};
     vehiclesData.forEach(v => {
-        const option = document.createElement('option');
-        option.value = JSON.stringify(v);
-        option.innerText = v.product_variant;
-        vSelect.appendChild(option);
+        if(!groupedVehicles[v.product_name]) groupedVehicles[v.product_name] = [];
+        groupedVehicles[v.product_name].push(v);
     });
+
+    for (const group in groupedVehicles) {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = group;
+        groupedVehicles[group].forEach(v => {
+            const option = document.createElement('option');
+            option.value = JSON.stringify(v);
+            option.innerText = v.product_variant;
+            optgroup.appendChild(option);
+        });
+        vSelect.appendChild(optgroup);
+    }
     
-    // Populate States
     statesData.forEach(s => {
         const option = document.createElement('option');
         option.value = JSON.stringify(s);
@@ -74,97 +76,134 @@ function populateCoreDropdowns() {
         sSelect.appendChild(option);
     });
 
-    // Default Select XEV 9e Pack Three 79 kWh if it exists in the array
-    const defaultIndex = Array.from(vSelect.options).findIndex(opt => opt.innerText.includes("XEV 9e Pack Three 79"));
-    if (defaultIndex > -1) {
-        vSelect.selectedIndex = defaultIndex;
-        handleVehicleChange();
-    }
+    // Defaults
+    const defaultStateIndex = Array.from(sSelect.options).findIndex(opt => opt.innerText.includes("Maharashtra"));
+    if (defaultStateIndex > -1) sSelect.selectedIndex = defaultStateIndex;
+
+    const defaultVehIndex = Array.from(vSelect.options).findIndex(opt => opt.innerText.includes("XEV 9e Pack Three 79"));
+    if (defaultVehIndex > -1) vSelect.selectedIndex = defaultVehIndex;
+
+    handleVehicleChange();
 }
 
-function attachEventListeners() {
-    // Stepper Controls
-    document.getElementById('btnDecDist').addEventListener('click', () => adjustDistance(-1));
-    document.getElementById('btnIncDist').addEventListener('click', () => adjustDistance(1));
-    document.getElementById('freqSelect').addEventListener('change', handleFrequencyChange);
-
-    // Fuel Type Pill Selection
-    document.getElementById('cardDiesel').addEventListener('click', () => selectFuelType('diesel'));
-    document.getElementById('cardPetrol').addEventListener('click', () => selectFuelType('petrol'));
-
-    // Driving Mix Slider
-    document.getElementById('routeSplitSlider').addEventListener('input', (e) => {
-        const highway = e.target.value;
-        const city = 100 - highway;
-        document.getElementById('cityLabel').innerText = `City: ${city}%`;
-        document.getElementById('highwayLabel').innerText = `Highway: ${highway}%`;
-        updateCalculations();
-    });
-
-    // Main Overrides & Toggles
-    document.getElementById('vehicleSelect').addEventListener('change', handleVehicleChange);
-    document.getElementById('stateSelect').addEventListener('change', updateCalculations);
-    document.getElementById('businessPurchaseCheck').addEventListener('change', toggleBusinessSection);
-    document.getElementById('corporateTaxRate').addEventListener('change', updateCalculations);
-    document.getElementById('exchangeCheck').addEventListener('change', toggleExchangeSection);
-    document.getElementById('fallbackToggleBtn').addEventListener('click', toggleValuationPath);
-
-    // Baseline Overrides with Masks
-    setupCurrencyMask('overrideIceExPrice', 'maskIceExPrice');
-    setupCurrencyMask('overrideEvExPrice', 'maskEvExPrice');
-    setupCurrencyMask('manualResaleInput', 'maskManualResale');
-    setupCurrencyMask('downPaymentInput', 'maskDownPayment');
-
-    // Advanced Assumptions
-    document.getElementById('toggleAssumptionsBtn').addEventListener('click', () => {
-        document.getElementById('baselineAccordion').classList.toggle('hidden');
-    });
-
-    // Attach update hooks to all advanced inputs
-    const advInputs = ['varPetrolPrice', 'varDieselPrice', 'varHomeCharge', 'varPublicCharge', 'varPetrolEff', 'varDieselEff', 'varEvEff', 'varEvSvc', 'varPetrolSvc', 'varDieselSvc', 'loanTenure', 'interestRate', 'odometerInput'];
-    advInputs.forEach(id => {
-        document.getElementById(id).addEventListener('input', updateCalculations);
-    });
-
-    // PDF Generator
-    document.getElementById('btnDownloadPdf').addEventListener('click', generatePDFReport);
+// 5. INTERACTION LOGIC
+function toggleFrequency() {
+    isMonthlyFreq = !isMonthlyFreq;
+    const btn = document.getElementById('freqToggleBtn');
+    btn.innerText = isMonthlyFreq ? 'monthly' : 'weekly';
+    
+    // Auto adjust reasonable defaults when switching
+    const distInput = document.getElementById('distanceNum');
+    distInput.value = isMonthlyFreq ? 1500 : 400;
+    
+    updateCalculations();
 }
 
-// 5. INTERACTION HANDLERS
+function adjustDistance(direction) {
+    const distInput = document.getElementById('distanceNum');
+    let current = parseInt(distInput.value) || 0;
+    const step = isMonthlyFreq ? 500 : 50;
+    
+    current += (step * direction);
+    if (current < 0) current = 0;
+    distInput.value = current;
+    updateCalculations();
+}
+
 function selectFuelType(type) {
     document.getElementById('cardDiesel').classList.toggle('selected', type === 'diesel');
     document.getElementById('cardPetrol').classList.toggle('selected', type === 'petrol');
     document.querySelector(`input[name="fuelType"][value="${type}"]`).checked = true;
     
-    // Update the baseline label
     document.getElementById('lblSpreadsheetIcePrice').innerText = type === 'petrol' ? 'Petrol Ex-Sh' : 'Diesel Ex-Sh';
-    
-    // Refresh vehicle mapping if selected
-    handleVehicleChange();
+    handleVehicleChange(); // Refetch defaults based on selection
 }
 
-let currentDistance = 400;
-function adjustDistance(direction) {
-    const isMonthly = document.getElementById('freqSelect').value === 'monthly';
-    const step = isMonthly ? 100 : 50;
-    const max = isMonthly ? MAX_MONTHLY_KM : MAX_WEEKLY_KM;
-    
-    currentDistance += (step * direction);
-    if (currentDistance < step) currentDistance = step;
-    if (currentDistance > max) currentDistance = max;
-    
-    document.getElementById('distDisplay').innerText = currentDistance;
+function handleRouteSplitChange() {
+    const highway = document.getElementById('routeSplitSlider').value;
+    document.getElementById('cityLabel').innerText = `City: ${100 - highway}%`;
+    document.getElementById('highwayLabel').innerText = `Highway: ${highway}%`;
     updateCalculations();
 }
 
-function handleFrequencyChange() {
-    const isMonthly = document.getElementById('freqSelect').value === 'monthly';
-    // Reset to sensible defaults on swap
-    currentDistance = isMonthly ? 1500 : 400;
-    document.getElementById('distDisplay').innerText = currentDistance;
+function toggleBusinessSection() {
+    const isChecked = document.getElementById('businessPurchaseCheck').checked;
+    document.getElementById('corporateTaxContainer').classList.toggle('hidden', !isChecked);
+    document.getElementById('rowCorporateTax').classList.toggle('hidden', !isChecked);
+    document.getElementById('proTipBox').classList.toggle('hidden', !isChecked);
     updateCalculations();
 }
 
+function toggleExchangeSection() {
+    const isChecked = document.getElementById('exchangeCheck').checked;
+    document.getElementById('exchangeSection').classList.toggle('hidden', !isChecked);
+    updateCalculations();
+}
+
+function toggleValuationPath() {
+    isManualValuationMode = !isManualValuationMode;
+    document.getElementById('dropdownsContainer').classList.toggle('hidden', isManualValuationMode);
+    
+    const textNode = document.getElementById('exchangeValueText');
+    const inputNode = document.getElementById('manualExchangeInput');
+    
+    if (isManualValuationMode) {
+        textNode.classList.add('hidden');
+        inputNode.classList.remove('hidden');
+        document.getElementById('fallbackToggleBtn').innerText = "Use guided vehicle list selection";
+    } else {
+        textNode.classList.remove('hidden');
+        inputNode.classList.add('hidden');
+        document.getElementById('fallbackToggleBtn').innerText = "Can't find your car listed? Enter manually";
+    }
+    updateCalculations();
+}
+
+function toggleAssumptions() {
+    document.getElementById('baselineAccordion').classList.toggle('hidden');
+}
+
+// 6. FORMATTERS & STEPPERS
+function formatToLakhsString(number) {
+    return "₹ " + (number / 100000).toFixed(2) + " L";
+}
+
+function formatEnIn(number) {
+    return "₹ " + parseInt(number).toLocaleString('en-IN');
+}
+
+function handleCurrencyFocus(inputId, useRs = true) {
+    const display = document.getElementById(inputId + 'Display');
+    const hidden = document.getElementById(inputId);
+    display.type = 'number';
+    display.value = hidden.value;
+}
+
+function handleCurrencyBlur(inputId, useRs = true) {
+    const display = document.getElementById(inputId + 'Display');
+    const hidden = document.getElementById(inputId);
+    display.type = 'text';
+    display.value = useRs ? formatEnIn(hidden.value) : parseInt(hidden.value).toLocaleString('en-IN');
+}
+
+function handleCurrencyInput(inputId, useRs = true) {
+    const display = document.getElementById(inputId + 'Display');
+    const hidden = document.getElementById(inputId);
+    hidden.value = display.value || 0;
+    updateCalculations();
+}
+
+function adjustCurrencyStepper(inputId, amount, useRs = true) {
+    const hidden = document.getElementById(inputId);
+    let val = parseInt(hidden.value) || 0;
+    val += amount;
+    if (val < 0) val = 0;
+    hidden.value = val;
+    handleCurrencyBlur(inputId, useRs);
+    updateCalculations();
+}
+
+// 7. DATA PIPELINES
 function handleVehicleChange() {
     const selectEl = document.getElementById('vehicleSelect');
     if (!selectEl.value) return;
@@ -177,46 +216,13 @@ function handleVehicleChange() {
     document.getElementById('overrideIceExPrice').value = iceExSh;
     document.getElementById('overrideEvExPrice').value = currentSpreadsheetVehicle.ex_showroom_ev;
     
-    // Trigger visual mask updates
-    document.getElementById('overrideIceExPrice').dispatchEvent(new Event('input'));
-    document.getElementById('overrideEvExPrice').dispatchEvent(new Event('input'));
+    handleCurrencyBlur('overrideIceExPrice');
+    handleCurrencyBlur('overrideEvExPrice');
     
     updateCalculations();
 }
 
-function toggleBusinessSection() {
-    const isChecked = document.getElementById('businessPurchaseCheck').checked;
-    document.getElementById('businessOptionsContainer').classList.toggle('hidden', !isChecked);
-    document.getElementById('rowCorporateTax').classList.toggle('hidden', !isChecked);
-    updateCalculations();
-}
-
-function toggleExchangeSection() {
-    const isChecked = document.getElementById('exchangeCheck').checked;
-    document.getElementById('exchangeSection').classList.toggle('hidden', !isChecked);
-    updateCalculations();
-}
-
-function toggleValuationPath() {
-    isManualValuationMode = !isManualValuationMode;
-    document.getElementById('matrixEvaluationContainer').classList.toggle('hidden', isManualValuationMode);
-    document.getElementById('manualValuationContainer').classList.toggle('hidden', !isManualValuationMode);
-    document.getElementById('fallbackToggleBtn').innerText = isManualValuationMode ? "Use guided vehicle list selection" : "Can't find your car? Enter manually";
-    updateCalculations();
-}
-
-function setupCurrencyMask(inputId, maskId) {
-    const input = document.getElementById(inputId);
-    const mask = document.getElementById(maskId);
-    
-    input.addEventListener('input', (e) => {
-        let val = parseFloat(e.target.value) || 0;
-        mask.innerText = "₹ " + val.toLocaleString('en-IN');
-        updateCalculations(); // Recalculate on manual override
-    });
-}
-
-// Resale Matrix Helpers
+// Resale Matrix
 function populateMakes() {
     const makeSelect = document.getElementById('makeSelect');
     makeSelect.innerHTML = '<option value="">Select Make</option>';
@@ -224,7 +230,6 @@ function populateMakes() {
         let opt = document.createElement('option'); opt.value = make; opt.innerText = make;
         makeSelect.appendChild(opt);
     });
-    makeSelect.addEventListener('change', updateModels);
 }
 function updateModels() {
     const make = document.getElementById('makeSelect').value;
@@ -237,7 +242,6 @@ function updateModels() {
             modelSelect.appendChild(opt);
         });
     }
-    modelSelect.addEventListener('change', updateYears);
     updateCalculations();
 }
 function updateYears() {
@@ -251,32 +255,30 @@ function updateYears() {
             yearSelect.appendChild(opt);
         });
     }
-    yearSelect.addEventListener('change', updateCalculations);
     updateCalculations();
 }
 
-// 6. CORE MATH ENGINE
+// 8. CORE ENGINE
 function updateCalculations() {
     if (!currentSpreadsheetVehicle) return;
     
-    // State Logic
+    // Grab State Multipliers
     const stateObj = document.getElementById('stateSelect').value ? JSON.parse(document.getElementById('stateSelect').value) : {overhead_multiplier_ice: 0.20, overhead_multiplier_ev: 0.05};
     
-    // Usage Logic
-    const isMonthly = document.getElementById('freqSelect').value === 'monthly';
-    const annualMileage = isMonthly ? currentDistance * 12 : currentDistance * 52;
+    // Usage Data
+    const distance = parseFloat(document.getElementById('distanceNum').value) || 0;
+    const annualMileage = isMonthlyFreq ? distance * 12 : distance * 52;
     const highwaySplit = parseFloat(document.getElementById('routeSplitSlider').value) / 100;
     const citySplit = 1 - highwaySplit;
     
-    // Fuel Setup
+    // Fuel Toggle
     const fuelType = document.querySelector('input[name="fuelType"]:checked').value;
     const isPetrol = (fuelType === 'petrol');
     
-    // Overrides
+    // Editable Baselines
     const iceExShowroom = parseFloat(document.getElementById('overrideIceExPrice').value) || 0;
     const evExShowroom = parseFloat(document.getElementById('overrideEvExPrice').value) || 0;
     
-    // Custom Variables
     const petrolPrice = parseFloat(document.getElementById('varPetrolPrice').value);
     const dieselPrice = parseFloat(document.getElementById('varDieselPrice').value);
     const homeCharge = parseFloat(document.getElementById('varHomeCharge').value);
@@ -285,43 +287,37 @@ function updateCalculations() {
     const iceEff = isPetrol ? parseFloat(document.getElementById('varPetrolEff').value) : parseFloat(document.getElementById('varDieselEff').value);
     const evEff = parseFloat(document.getElementById('varEvEff').value);
     
-    // blended charging cost
+    let tempEvSvcRate = parseFloat(document.getElementById('varEvSvc').value);
+    let tempIceSvcRate = isPetrol ? parseFloat(document.getElementById('varPetrolSvc').value) : parseFloat(document.getElementById('varDieselSvc').value);
+
+    // Day 0 Math
     const blendedUnitCost = (citySplit * homeCharge) + (highwaySplit * publicCharge);
-    
-    // Cost per KM
     const iceCostPerKm = (isPetrol ? petrolPrice : dieselPrice) / iceEff;
     const evCostPerKm = blendedUnitCost / evEff;
 
-    // Day 0 Taxes & Overheads
     const iceTaxAmt = iceExShowroom * stateObj.overhead_multiplier_ice;
     const evTaxAmt = evExShowroom * stateObj.overhead_multiplier_ev;
     
     let iceCumulative = iceExShowroom + iceTaxAmt;
     let evCumulative = evExShowroom + evTaxAmt;
 
-    // Business Tax Parameters
     const isBusiness = document.getElementById('businessPurchaseCheck').checked;
-    const corpTaxRate = parseFloat(document.getElementById('corporateTaxRate').value);
+    const corpTaxRate = parseFloat(document.getElementById('corporateTaxRate').value) / 100;
     let iceWdv = iceExShowroom;
     let evWdv = evExShowroom;
     let totalCorpTaxSaved = 0;
 
-    // Timeline Generation
     let timeline = [];
     
-    // Base Milestones
-    timeline.push({ label: "Ex-sh.", ice: Math.round(iceExShowroom), ev: Math.round(evExShowroom), isCumulativeCost: false, isSeparator: false });
-    timeline.push({ label: "Road Tax, Ins. & other charges", ice: Math.round(iceTaxAmt), ev: Math.round(evTaxAmt), isCumulativeCost: false, isSeparator: false });
-    timeline.push({ label: "Day 0 Upfront Cost", ice: Math.round(iceCumulative), ev: Math.round(evCumulative), isCumulativeCost: true, isSeparator: true });
+    timeline.push({ label: "Ex-sh.", ice: iceExShowroom, ev: evExShowroom, isCumulativeCost: false, isSeparator: false });
+    timeline.push({ label: "Road Tax, Ins. & other charges", ice: iceTaxAmt, ev: evTaxAmt, isCumulativeCost: false, isSeparator: false });
+    timeline.push({ label: "Day 0 Upfront Cost", ice: iceCumulative, ev: evCumulative, isCumulativeCost: true, isSeparator: true });
 
     let totalIceFuelSpent = 0; let totalEvEnergySpent = 0;
     let totalIceSvcSpent = 0; let totalEvSvcSpent = 0;
     let breakevenYear = null;
 
-    let tempEvSvcRate = parseFloat(document.getElementById('varEvSvc').value);
-    let tempIceSvcRate = isPetrol ? parseFloat(document.getElementById('varPetrolSvc').value) : parseFloat(document.getElementById('varDieselSvc').value);
-
-    // 7 Year Projection Loop
+    // 7 Year Projection
     for (let year = 1; year <= 7; year++) {
         let yrIceFuel = annualMileage * iceCostPerKm;
         let yrEvEnergy = annualMileage * evCostPerKm;
@@ -337,8 +333,9 @@ function updateCalculations() {
         iceCumulative += (yrIceFuel + yrIceSvc);
         evCumulative += (yrEvEnergy + yrEvSvc);
 
-        // Corporate Tax Shield WDV Logic
-        let yearTaxNote = "";
+        let yearTaxNoteIce = "";
+        let yearTaxNoteEv = "";
+        
         if (isBusiness) {
             let iceDepreciation = iceWdv * 0.15;
             let evDepreciation = evWdv * 0.40;
@@ -346,7 +343,6 @@ function updateCalculations() {
             let iceTaxShield = iceDepreciation * corpTaxRate;
             let evTaxShield = evDepreciation * corpTaxRate;
             
-            // Subtracting the actual cash saved from the cumulative out-of-pocket
             iceCumulative -= iceTaxShield;
             evCumulative -= evTaxShield;
             
@@ -355,28 +351,29 @@ function updateCalculations() {
             iceWdv -= iceDepreciation;
             evWdv -= evDepreciation;
             
-            yearTaxNote = `<br><span style="font-size:10px; color:var(--text-secondary);">(incl. ₹${((evTaxShield - iceTaxShield)/100000).toFixed(2)}L Tax Saved)</span>`;
+            yearTaxNoteIce = `<br><span class="tax-hint">(incl. ${formatToLakhsString(iceTaxShield)} Tax Saved)</span>`;
+            yearTaxNoteEv = `<br><span class="tax-hint">(incl. ${formatToLakhsString(evTaxShield)} Tax Saved)</span>`;
         }
 
         tempEvSvcRate *= 1.05;
         tempIceSvcRate *= 1.20;
 
         if (evCumulative <= iceCumulative && breakevenYear === null) {
-            // Rough linear interpolation for month of crossover
-            let prevYearIce = iceCumulative - (yrIceFuel + yrIceSvc);
-            let prevYearEv = evCumulative - (yrEvEnergy + yrEvSvc);
+            let prevYearIce = iceCumulative - (yrIceFuel + yrIceSvc) + (isBusiness ? (iceWdv/0.85)*0.15*corpTaxRate : 0);
+            let prevYearEv = evCumulative - (yrEvEnergy + yrEvSvc) + (isBusiness ? (evWdv/0.60)*0.40*corpTaxRate : 0);
             let prevDiff = prevYearEv - prevYearIce;
-            let catchupRate = (yrIceFuel + yrIceSvc) - (yrEvEnergy + yrEvSvc);
-            breakevenYear = (year - 1) + (prevDiff / catchupRate);
+            let catchupRate = (iceCumulative - prevYearIce) - (evCumulative - prevYearEv);
+            breakevenYear = (year - 1) + Math.abs(prevDiff / catchupRate);
         }
 
         timeline.push({ 
             label: "Year " + year, 
-            ice: Math.round(iceCumulative), 
-            ev: Math.round(evCumulative), 
+            ice: iceCumulative, 
+            ev: evCumulative, 
             isCumulativeCost: true, 
             isSeparator: false,
-            note: yearTaxNote
+            noteIce: yearTaxNoteIce,
+            noteEv: yearTaxNoteEv
         });
     }
 
@@ -384,18 +381,16 @@ function updateCalculations() {
     const taxSavings = iceTaxAmt - evTaxAmt; 
     const fuelSavings = totalIceFuelSpent - totalEvEnergySpent;
     const serviceSavings = totalIceSvcSpent - totalEvSvcSpent;
-    
     const netTcoResult = exShowroomPremium + taxSavings + fuelSavings + serviceSavings + totalCorpTaxSaved;
 
-    // Render Output
     renderTableAndLedger(timeline, { exShowroomPremium, taxSavings, fuelSavings, serviceSavings, totalCorpTaxSaved, netTcoResult }, breakevenYear);
     renderChart(timeline);
 
-    // EMI & Exchange Calculation Block
+    // EXCHANGE & FINANCE
     let finalTradeInEquity = 0;
     if (document.getElementById('exchangeCheck').checked) {
         if (isManualValuationMode) {
-            finalTradeInEquity = parseFloat(document.getElementById('manualResaleInput').value) || 0;
+            finalTradeInEquity = parseFloat(document.getElementById('manualExchangeInput').value) || 0;
         } else {
             const make = document.getElementById('makeSelect').value;
             const model = document.getElementById('modelSelect').value;
@@ -403,17 +398,18 @@ function updateCalculations() {
             const kms = parseFloat(document.getElementById('odometerInput').value) || 0;
             if (make && model && year && tradeInDatabase[make]?.[model]?.[year]) {
                 const rule = tradeInDatabase[make][model][year];
-                finalTradeInEquity = Math.max(0, rule.baseValue - (kms * rule.penalty));
+                // Floor at 75k per request
+                finalTradeInEquity = Math.max(75000, rule.baseValue - (kms * rule.penalty));
             }
         }
     }
-    document.getElementById('resaleValueText').innerText = "₹ " + finalTradeInEquity.toLocaleString('en-IN');
+    
+    document.getElementById('exchangeValueText').innerText = formatToLakhsString(finalTradeInEquity);
 
     const rawDownpaymentAmt = parseFloat(document.getElementById('downPaymentInput').value) || 0;
     const tenureYears = parseInt(document.getElementById('loanTenure').value);
     const interestRateVal = parseFloat(document.getElementById('interestRate').value);
     
-    // Day 0 EV Cost
     const evOnRoadTotal = evExShowroom + evTaxAmt;
     const evPrincipal = Math.max(0, evOnRoadTotal - rawDownpaymentAmt - finalTradeInEquity);
     
@@ -423,49 +419,14 @@ function updateCalculations() {
     
     const quoteBox = document.getElementById('imaginationQuote');
     if (evPrincipal <= 0) {
-        quoteBox.innerHTML = `Your down payment and trade equity completely cover the eSUV on-road cost! No financing principal remaining.`;
+        quoteBox.innerHTML = `Your down payment and exchange value completely cover the eSUV on-road cost! No financing principal remaining.`;
     } else {
-        quoteBox.innerHTML = `Financing a net principal of <strong>₹ ${(evPrincipal / 100000).toFixed(2)} Lakh</strong> over ${tenureYears} years. Estimated installment matches <strong>₹ ${Math.round(calculatedMonthlyEMI).toLocaleString('en-IN')} / month</strong>.`;
+        quoteBox.innerHTML = `Based on a loan amount of <strong>${formatToLakhsString(evPrincipal)}</strong> over ${tenureYears} years, your estimated EMI is: <strong>${formatEnIn(Math.round(calculatedMonthlyEMI))}/month</strong>`;
     }
 }
 
-// 7. RENDER HELPER FUNCTIONS
-function formatToLakhs(number) {
-    return "₹" + (number / 100000).toFixed(2) + " L";
-}
-
+// 9. RENDERERS
 function renderTableAndLedger(timeline, ledger, breakevenYear) {
-    // LEDGER UI
-    const ledgerEx = document.getElementById('ledgerExEx');
-    if (ledger.exShowroomPremium < 0) {
-        ledgerEx.className = "val-negative";
-        ledgerEx.innerText = "- ₹" + Math.abs(Math.round(ledger.exShowroomPremium)).toLocaleString('en-IN');
-    } else {
-        ledgerEx.className = "val-positive";
-        ledgerEx.innerText = "+ ₹" + Math.round(ledger.exShowroomPremium).toLocaleString('en-IN');
-    }
-    
-    document.getElementById('ledgerTax').innerText = "₹" + Math.round(ledger.taxSavings).toLocaleString('en-IN');
-    document.getElementById('ledgerFuel').innerText = "₹" + Math.round(ledger.fuelSavings).toLocaleString('en-IN');
-    document.getElementById('ledgerSvc').innerText = "₹" + Math.round(ledger.serviceSavings).toLocaleString('en-IN');
-    
-    if(ledger.totalCorpTaxSaved > 0) {
-        document.getElementById('ledgerCorporateTax').innerText = "₹" + Math.round(ledger.totalCorpTaxSaved).toLocaleString('en-IN');
-    }
-    
-    const totalNode = document.getElementById('ledgerTotal');
-    totalNode.innerText = "₹" + Math.round(ledger.netTcoResult).toLocaleString('en-IN');
-
-    // BREAKEVEN HERO
-    const bCard = document.getElementById('breakevenCard');
-    if (breakevenYear && breakevenYear <= 7) {
-        bCard.classList.remove('hidden');
-        document.getElementById('breakevenVal').innerText = breakevenYear.toFixed(1) + " Years";
-    } else {
-        bCard.classList.add('hidden');
-    }
-
-    // TABLE UI
     const tbody = document.getElementById('tcoTableBody');
     tbody.innerHTML = '';
     timeline.forEach(row => {
@@ -474,19 +435,19 @@ function renderTableAndLedger(timeline, ledger, breakevenYear) {
 
         if (row.ice < row.ev) {
             iceClass = 'class="leader-green"';
-            marginText = `ICE saves ${formatToLakhs(row.ev - row.ice)}`;
+            marginText = `Prem ${formatToLakhsString(row.ev - row.ice)}`;
         } else if (row.ev < row.ice) {
             evClass = 'class="leader-green"';
-            marginText = `EV saves ${formatToLakhs(row.ice - row.ev)}`;
+            marginText = `Saves ${formatToLakhsString(row.ice - row.ev)}`;
         } else {
             marginText = '-';
         }
 
         tr.innerHTML = `
-            <td><strong>${row.label}</strong>${row.note || ""}</td>
-            <td ${iceClass}>${formatToLakhs(row.ice)}</td>
-            <td ${evClass}>${formatToLakhs(row.ev)}</td>
-            <td>${marginText}</td>
+            <td><strong>${row.label}</strong></td>
+            <td ${iceClass}>${formatToLakhsString(row.ice)}${row.noteIce || ""}</td>
+            <td ${evClass}>${formatToLakhsString(row.ev)}${row.noteEv || ""}</td>
+            <td><strong>${marginText}</strong></td>
         `;
         tbody.appendChild(tr);
 
@@ -497,6 +458,36 @@ function renderTableAndLedger(timeline, ledger, breakevenYear) {
             tbody.appendChild(sepTr);
         }
     });
+
+    const ledgerEx = document.getElementById('ledgerExEx');
+    if (ledger.exShowroomPremium < 0) {
+        ledgerEx.className = "val-negative";
+        ledgerEx.innerText = "- " + formatEnIn(Math.abs(Math.round(ledger.exShowroomPremium)));
+    } else {
+        ledgerEx.className = "val-positive";
+        ledgerEx.innerText = "+ " + formatEnIn(Math.round(ledger.exShowroomPremium));
+    }
+    
+    document.getElementById('ledgerTax').innerText = formatEnIn(Math.round(ledger.taxSavings));
+    document.getElementById('ledgerFuel').innerText = formatEnIn(Math.round(ledger.fuelSavings));
+    document.getElementById('ledgerSvc').innerText = formatEnIn(Math.round(ledger.serviceSavings));
+    
+    if(ledger.totalCorpTaxSaved > 0) {
+        document.getElementById('ledgerCorporateTax').innerText = formatEnIn(Math.round(ledger.totalCorpTaxSaved));
+    }
+    document.getElementById('ledgerTotal').innerText = formatEnIn(Math.round(ledger.netTcoResult));
+
+    const bCard = document.getElementById('breakevenCard');
+    if (breakevenYear && breakevenYear <= 7 && breakevenYear > 0) {
+        bCard.classList.remove('hidden');
+        document.getElementById('breakevenVal').innerText = breakevenYear.toFixed(1) + " Years";
+        
+        let yearsStr = Math.floor(breakevenYear);
+        let monthsStr = Math.round((breakevenYear - yearsStr) * 12);
+        document.getElementById('breakevenSubtext').innerText = `${yearsStr} years ${monthsStr} months`;
+    } else {
+        bCard.classList.add('hidden');
+    }
 }
 
 function renderChart(timelineData) {
@@ -507,13 +498,24 @@ function renderChart(timelineData) {
     chart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: plotPoints.map(d => d.label),
+            labels: plotPoints.map((d, i) => i === 0 ? 'Day 0' : `Yr. ${i}`),
             datasets: [
-                { label: 'Mahindra eSUV', data: plotPoints.map(d => d.ev), borderColor: '#00875a', backgroundColor: '#00875a', fill: false, tension: 0.1 },
-                { label: 'ICE', data: plotPoints.map(d => d.ice), borderColor: '#0066cc', backgroundColor: '#0066cc', fill: false, tension: 0.1 }
+                { label: 'Mahindra eSUV', data: plotPoints.map(d => d.ev), borderColor: '#00875a', backgroundColor: '#00875a', fill: false, tension: 0.1, pointRadius: 4 },
+                { label: 'ICE', data: plotPoints.map(d => d.ice), borderColor: '#0066cc', backgroundColor: '#0066cc', fill: false, tension: 0.1, pointRadius: 4 }
             ]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: function(value) { return '₹' + (value/100000).toFixed(2) + ' L'; }
+                    }
+                }
+            }
+        }
     });
 }
 
