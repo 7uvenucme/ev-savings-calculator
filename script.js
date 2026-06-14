@@ -521,28 +521,35 @@ function renderChart(timelineData) {
 
 function generatePDFReport() {
     const targetElement = document.getElementById('pdfSnapshotTarget');
-
-    // 1. Force the element to expand fully and override browser viewport limits
-    targetElement.style.height = 'auto';
-    targetElement.style.overflow = 'visible';
+    
+    // 1. Temporarily apply the reset class
+    targetElement.classList.add('pdf-capture-mode');
 
     const options = {
         margin: 10,
-        filename: 'EV_Savings_TCO_Report.pdf',
+        filename: 'EV_Savings_TCO_ReportN.pdf',
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { 
             scale: 2, 
             useCORS: true,
-            // These properties tell the renderer to ignore the screen size
+            // These lines prevent the "crop to the right" issue
+            x: 0,
+            y: 0,
+            scrollX: 0,
+            scrollY: 0,
             windowWidth: targetElement.scrollWidth,
             windowHeight: targetElement.scrollHeight
         },
         jsPDF: { 
             unit: 'mm', 
-            format: [210, 2000], // Keep this for the tall page
+            format: [210, 2000], // Long page
             orientation: 'portrait' 
         }
     };
 
-    html2pdf().set(options).from(targetElement).save();
+    // 2. Generate PDF
+    html2pdf().set(options).from(targetElement).save().then(() => {
+        // 3. Remove the class after the PDF is created so the UI returns to normal
+        targetElement.classList.remove('pdf-capture-mode');
+    });
 }

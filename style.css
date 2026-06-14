@@ -141,15 +141,13 @@ input:checked + .slider:before { transform: translateX(20px); }
 .disclaimer-section { border-top: 1px solid var(--border-color); padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.6; }
 .hidden { display: none !important; }
 
-/* Apply this ONLY when printing if possible, or add to your main CSS */
-#pdfSnapshotTarget {
-    position: relative !important;
-    display: block !important;
+/* Add this to your CSS */
+.pdf-capture-mode {
+    margin: 0 !important;
+    padding: 20px !important; /* Keep a little padding, or remove if not wanted */
+    position: static !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
-    height: auto !important;
-    overflow: visible !important;
-}
-/* Ensure no parent containers are clipping the overflow */
-body, .container, .main-wrapper {
-    overflow: visible !important;
+    max-width: none !important;
 }
