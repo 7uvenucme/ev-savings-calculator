@@ -154,3 +154,10 @@ input:checked + .slider:before { transform: translateX(20px); }
     z-index: 9999 !important;
     background: white !important;
 }
+
+/* Apply to your entire app structure */
+html, body, .app-container, .main-wrapper, #pdfSnapshotTarget {
+    overflow: visible !important;
+    height: auto !important;
+    display: block !important;
+}

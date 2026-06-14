@@ -518,37 +518,34 @@ function renderChart(timelineData) {
         }
     });
 }
-
 function generatePDFReport() {
     const targetElement = document.getElementById('pdfSnapshotTarget');
-    
-    // Apply the "Reset" class
-    targetElement.classList.add('pdf-capture-reset');
+
+    // 1. Get the real size of the content
+    const width = targetElement.scrollWidth;
+    const height = targetElement.scrollHeight;
 
     const options = {
         margin: 10,
-        filename: 'EV_Savings_TCO_Report.pdf',
+        filename: 'EV_Savings_TCO_ReportN.pdf',
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { 
             scale: 2, 
             useCORS: true,
-            // Force the camera to look at the exact width we set in CSS
-            windowWidth: 750, 
-            width: 750,
-            x: 0,
-            y: 0,
-            scrollX: 0,
-            scrollY: 0
+            // These properties ensure we capture the whole scrollable area
+            width: width,
+            height: height,
+            windowWidth: width,
+            windowHeight: height,
+            logging: true // Set to true to see if it's failing in the console
         },
         jsPDF: { 
             unit: 'mm', 
-            format: 'a4', 
+            format: 'a4', // Stick to a4, let the library handle the multi-page split
             orientation: 'portrait' 
-        }
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
 
-    html2pdf().set(options).from(targetElement).save().then(() => {
-        // Remove the reset class immediately
-        targetElement.classList.remove('pdf-capture-reset');
-    });
+    html2pdf().set(options).from(targetElement).save();
 }
