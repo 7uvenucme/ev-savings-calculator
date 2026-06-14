@@ -503,23 +503,29 @@ function renderChart(timelineData) {
 function generatePDFReport() {
     const targetElement = document.getElementById('pdfSnapshotTarget');
     
-    // Apply desktop wrap fix to prevent clipping
+    // Apply the class to lock the layout width during capture
     targetElement.classList.add('pdf-capture-mode');
 
     const options = {
-        margin: [10, 10, 10, 10],
-        filename: 'EV_Savings_TCO_Report.pdf',
+        margin: [10, 10, 10, 10], // top, left, bottom, right margins in mm
+        filename: 'EV_Savings_TCO_Report_.pdf',
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { 
-            scale: 2, 
+            scale: 2, // High resolution
             useCORS: true,
-            windowWidth: 800
+            windowWidth: 800 // Force the canvas to match our CSS width
         },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        jsPDF: { 
+            unit: 'mm', 
+            format: 'a4', 
+            orientation: 'portrait' 
+        },
+        // THIS IS THE CRITICAL LINE TO STOP CROPPING
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } 
     };
 
     html2pdf().set(options).from(targetElement).save().then(() => {
+        // Remove the class after the PDF is saved to restore normal viewing
         targetElement.classList.remove('pdf-capture-mode');
     });
 }

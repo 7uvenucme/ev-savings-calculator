@@ -161,6 +161,26 @@ input:checked + .slider:before { transform: translateX(20px); }
 .disclaimer-section { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.6; padding: 0 16px; }
 .hidden { display: none !important; }
 
-/* PDF CAPTURE FIX: Forces desktop width during PDF generation so layout doesn't wrap/crop */
-.pdf-capture-mode { width: 800px !important; max-width: none !important; margin: 0 !important; background-color: #f5f5f7 !important; padding: 20px !important;}
-.pdf-capture-mode .premium-card { page-break-inside: avoid; }
+/* 1. Prevent blank pages by ensuring the container height is flexible */
+#pdfSnapshotTarget {
+    height: auto !important;
+    min-height: auto !important;
+}
+
+/* 2. Prevent cards, tables, and charts from being sliced in half across pages */
+.premium-card, 
+.tco-table, 
+canvas#tcoChart {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+}
+
+/* 3. Force the layout into a clean, desktop-width snapshot just for the PDF */
+/* This prevents mobile views from creating narrow, overly long PDFs */
+.pdf-capture-mode {
+    width: 800px !important; 
+    max-width: none !important; 
+    margin: 0 !important; 
+    background-color: #f5f5f7 !important; 
+    padding: 20px !important;
+}
