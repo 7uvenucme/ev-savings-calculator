@@ -141,10 +141,16 @@ input:checked + .slider:before { transform: translateX(20px); }
 .disclaimer-section { border-top: 1px solid var(--border-color); padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.6; }
 .hidden { display: none !important; }
 
-/* Add this to your CSS */
-.pdf-capture-fix {
-    width: 750px !important; /* Approx A4 width in pixels */
-    margin: 0 auto !important;
+/* Add this to your style sheet */
+.pdf-capture-reset {
+    margin: 0 !important;
     padding: 20px !important;
-    background: white !important; /* Ensure background isn't transparent */
+    position: absolute !important; /* Detach from layout flow */
+    top: 0 !important;
+    left: 0 !important;
+    width: 750px !important; /* Force a concrete pixel width */
+    max-width: 750px !important;
+    transform: none !important; /* Essential: transforms break canvas capture */
+    z-index: 9999 !important;
+    background: white !important;
 }

@@ -522,28 +522,33 @@ function renderChart(timelineData) {
 function generatePDFReport() {
     const targetElement = document.getElementById('pdfSnapshotTarget');
     
-    // Add the class to force fixed width
-    targetElement.classList.add('pdf-capture-fix');
+    // Apply the "Reset" class
+    targetElement.classList.add('pdf-capture-reset');
 
     const options = {
-        margin:       10,
-        filename:     'EV_Savings_Report.pdf',
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { 
+        margin: 10,
+        filename: 'EV_Savings_TCO_Report.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
             scale: 2, 
             useCORS: true,
-            windowWidth: 750 // Force the canvas to look at the width of our container
+            // Force the camera to look at the exact width we set in CSS
+            windowWidth: 750, 
+            width: 750,
+            x: 0,
+            y: 0,
+            scrollX: 0,
+            scrollY: 0
         },
-        jsPDF:        { 
+        jsPDF: { 
             unit: 'mm', 
             format: 'a4', 
             orientation: 'portrait' 
-        },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        }
     };
 
-    // Generate, then clean up
     html2pdf().set(options).from(targetElement).save().then(() => {
-        targetElement.classList.remove('pdf-capture-fix');
+        // Remove the reset class immediately
+        targetElement.classList.remove('pdf-capture-reset');
     });
 }
