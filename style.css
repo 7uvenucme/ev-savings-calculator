@@ -140,3 +140,15 @@ input:checked + .slider:before { transform: translateX(20px); }
 .pdf-download-btn:hover { background-color: #000000; }
 .disclaimer-section { border-top: 1px solid var(--border-color); padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.6; }
 .hidden { display: none !important; }
+
+/* 1. Ensure the container isn't forced to a height (this causes blank pages) */
+#pdfSnapshotTarget {
+    height: auto !important;
+    min-height: auto !important;
+}
+
+/* 2. Prevent cards or tables from being cut in half (this stops cropping) */
+.tco-table, .card, .chart-container {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
