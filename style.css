@@ -175,12 +175,12 @@ canvas#tcoChart {
     page-break-inside: avoid !important;
 }
 
-/* 3. Force the layout into a clean, desktop-width snapshot just for the PDF */
-/* This prevents mobile views from creating narrow, overly long PDFs */
+/* Add this to style.css */
 .pdf-capture-mode {
-    width: 800px !important; 
-    max-width: none !important; 
-    margin: 0 !important; 
-    background-color: #f5f5f7 !important; 
-    padding: 20px !important;
+    width: 800px !important;    /* Forces a consistent desktop width */
+    max-width: none !important; /* Prevents responsiveness from shrinking it */
+    margin: 0 auto !important;
+    padding: 40px !important;
+    background-color: white !important; /* Ensures no transparent background issues */
+    transform-origin: top left;
 }
