@@ -103,7 +103,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 /* SUMMARY & HERO */
 .linear-breakdown { background: #f8fafc; border-radius: 16px; padding: 16px; border: 1px solid var(--border-color); margin-bottom: 1.5rem; }
 .breakdown-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed var(--border-color); font-size: 0.9rem; }
-.breakdown-row.total-row { border-bottom: none; background: #ffffff; padding: 12px; border-radius: 8px; margin-top: 6px; font-weight: bold; border: 1px solid var(--border-color); }
+.breakdown-row.total-row { border-bottom: none; background: #ffffff; padding: 6px; border-radius: 8px; margin-top: 6px; font-weight: bold; border: 1px solid var(--border-color); }
 .row-title { color: var(--text-secondary); font-weight: 600; }
 .val-negative { color: var(--danger-red); font-weight: 700; }
 .val-positive { color: var(--premium-green); font-weight: 700; }
