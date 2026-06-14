@@ -502,10 +502,6 @@ function renderChart(timelineData) {
 async function generatePDFReport() {
 
     const target = document.getElementById('pdfSnapshotTarget');
-
-    const chart = document.getElementById('tcoChart');
-    if (chart) chart.style.display = 'none';
-
     try {
 
         const fullCanvas = await html2canvas(target, {
@@ -602,8 +598,5 @@ console.log(
         alert('PDF generation failed');
 
     } finally {
-
-        if (chart) chart.style.display = '';
-
     }
 }
