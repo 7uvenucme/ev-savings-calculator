@@ -141,14 +141,15 @@ input:checked + .slider:before { transform: translateX(20px); }
 .disclaimer-section { border-top: 1px solid var(--border-color); padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.6; }
 .hidden { display: none !important; }
 
-/* 1. Ensure the container isn't forced to a height (this causes blank pages) */
+/* Apply this ONLY when printing if possible, or add to your main CSS */
 #pdfSnapshotTarget {
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
     height: auto !important;
-    min-height: auto !important;
+    overflow: visible !important;
 }
-
-/* 2. Prevent cards or tables from being cut in half (this stops cropping) */
-.tco-table, .card, .chart-container {
-    break-inside: avoid;
-    page-break-inside: avoid;
+/* Ensure no parent containers are clipping the overflow */
+body, .container, .main-wrapper {
+    overflow: visible !important;
 }

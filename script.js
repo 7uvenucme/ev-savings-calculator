@@ -521,20 +521,25 @@ function renderChart(timelineData) {
 
 function generatePDFReport() {
     const targetElement = document.getElementById('pdfSnapshotTarget');
-    
+
+    // 1. Force the element to expand fully and override browser viewport limits
+    targetElement.style.height = 'auto';
+    targetElement.style.overflow = 'visible';
+
     const options = {
         margin: 10,
-        filename: 'EV_Savings_Report.pdf',
+        filename: 'EV_Savings_TCO_Report.pdf',
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { 
             scale: 2, 
             useCORS: true,
-            logging: false
+            // These properties tell the renderer to ignore the screen size
+            windowWidth: targetElement.scrollWidth,
+            windowHeight: targetElement.scrollHeight
         },
-        // [210mm width, 2000mm height] = One very tall page instead of A4
         jsPDF: { 
             unit: 'mm', 
-            format: [210, 2000], 
+            format: [210, 2000], // Keep this for the tall page
             orientation: 'portrait' 
         }
     };
