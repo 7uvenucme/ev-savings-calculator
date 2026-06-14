@@ -48,7 +48,7 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 .stepper-btn:hover { background: #e2e8f0; }
 .stepper-controls input { width: 65px; border: none; background: transparent; padding: 0; margin: 0; text-align: center; font-weight: 700; color: var(--accent-blue); font-size: 1rem; -moz-appearance: textfield; }
 .stepper-controls input::-webkit-outer-spin-button, .stepper-controls input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.capsule-tag { background: #e2e8f0; color: var(--midnight-navy); font-weight: 700; font-size: 0.85rem; padding: 6px 14px; border-radius: 20px; border: none; cursor: pointer; transition: all 0.2s; text-transform: uppercase; }
+.capsule-tag { background: #e2e8f0; color: var(--midnight-navy); font-weight: 700; font-size: 0.85rem; padding: 6px 14px; border-radius: 20px; border: none; cursor: pointer; transition: all 0.2s; text-transform: lowercase; }
 .capsule-tag:hover { background: #cbd5e1; }
 
 /* SLIDER WITH TEETH */
