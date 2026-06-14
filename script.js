@@ -523,13 +523,20 @@ function generatePDFReport() {
     const targetElement = document.getElementById('pdfSnapshotTarget');
     
     const options = {
-        margin: [10, 10, 10, 10], // 10mm margins
-        filename: 'EV_Savings_TCO_Report.pdf',
+        margin: 10,
+        filename: 'EV_Savings_Report.pdf',
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        // This is the key fix for cropping issues
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } 
+        html2canvas: { 
+            scale: 2, 
+            useCORS: true,
+            logging: false
+        },
+        // [210mm width, 2000mm height] = One very tall page instead of A4
+        jsPDF: { 
+            unit: 'mm', 
+            format: [210, 2000], 
+            orientation: 'portrait' 
+        }
     };
 
     html2pdf().set(options).from(targetElement).save();
