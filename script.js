@@ -1,5 +1,3 @@
-import { injectSpeedInsights } from '@vercel/speed-insights';
-injectSpeedInsights();
 
 // 1. Initialize Supabase Connection
 const SUPABASE_URL = 'https://jwuzpwglpqkohecxkeuf.supabase.co';
