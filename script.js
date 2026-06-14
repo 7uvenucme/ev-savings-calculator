@@ -500,45 +500,110 @@ function renderChart(timelineData) {
     });
 }
 async function generatePDFReport() {
-    const targetElement = document.getElementById('pdfSnapshotTarget');
-    
-    if (!targetElement) {
-        console.error("PDF Target element not found!");
-        return;
-    }
-console.log(
-  targetElement.scrollHeight
-);
-    // 1. Add the class
-    targetElement.classList.add('pdf-capture-mode');
 
-    const options = {
-        margin: 5,
-        filename: 'EV_Savings_Report.pdf',
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { 
-            scale: 2, 
-            useCORS: true,
-            windowWidth: 800 
-        },
-        jsPDF: { 
-            unit: 'mm', 
-            format: 'a4', 
-            orientation: 'portrait' 
-        }
-    };
+    const target = document.getElementById('pdfSnapshotTarget');
+
+    const chart = document.getElementById('tcoChart');
+    if (chart) chart.style.display = 'none';
 
     try {
-        // 2. Use the worker to handle the capture
-        const worker = html2pdf().set(options).from(targetElement);
-        
-        await worker.save();
-        console.log("PDF download triggered successfully.");
-    } catch (error) {
-        console.error("PDF Generation failed:", error);
-        alert("Failed to generate PDF. Please check console for errors.");
+
+        const fullCanvas = await html2canvas(target, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            scrollX: 0,
+            scrollY: 0
+        });
+
+        const { jsPDF } = window.jspdf;
+
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pdfWidth = 210;
+        const pdfHeight = 297;
+
+        const margin = 0;
+
+        const usableWidth = pdfWidth - (margin * 2);
+        const usableHeight = pdfHeight - (margin * 2);
+
+        const pageCanvasHeight =
+            Math.floor(
+                fullCanvas.width *
+                (usableHeight / usableWidth)
+            );
+
+        let pageIndex = 0;
+        let renderedHeight = 0;
+
+        while (renderedHeight < fullCanvas.height) {
+
+            const pageCanvas = document.createElement('canvas');
+            const pageCtx = pageCanvas.getContext('2d');
+
+            pageCanvas.width = fullCanvas.width;
+
+            pageCanvas.height = Math.min(
+                pageCanvasHeight,
+                fullCanvas.height - renderedHeight
+            );
+
+            pageCtx.drawImage(
+                fullCanvas,
+                0,
+                renderedHeight,
+                fullCanvas.width,
+                pageCanvas.height,
+                0,
+                0,
+                fullCanvas.width,
+                pageCanvas.height
+            );
+
+            const imgData = pageCanvas.toDataURL(
+                'image/jpeg',
+                0.95
+            );
+
+            const imgHeightMM =
+                (pageCanvas.height * usableWidth) /
+                pageCanvas.width;
+
+            if (pageIndex > 0) {
+                pdf.addPage();
+            }
+
+            pdf.addImage(
+                imgData,
+                'JPEG',
+                margin,
+                margin,
+                usableWidth,
+                imgHeightMM
+            );
+
+            renderedHeight += pageCanvas.height;
+            pageIndex++;
+        }
+
+        pdf.save('EV_Savings_Report.pdf');
+console.log(
+    fullCanvas.width,
+    fullCanvas.height
+);
+    } catch (err) {
+
+        console.error(err);
+        alert('PDF generation failed');
+
     } finally {
-        // 3. Always remove the class, even if the error occurs
-        targetElement.classList.remove('pdf-capture-mode');
+
+        if (chart) chart.style.display = '';
+
     }
 }
