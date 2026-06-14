@@ -499,39 +499,45 @@ function renderChart(timelineData) {
         }
     });
 }
-
-function generatePDFReport() {
+async function generatePDFReport() {
     const targetElement = document.getElementById('pdfSnapshotTarget');
     
-    // Apply the class to lock the layout width during capture
+    if (!targetElement) {
+        console.error("PDF Target element not found!");
+        return;
+    }
+
+    // 1. Add the class
     targetElement.classList.add('pdf-capture-mode');
 
     const options = {
-        margin: 5, // Smaller margin to maximize content space
-        filename: 'EV_Savings_Report_SinglePage.pdf',
+        margin: 5,
+        filename: 'EV_Savings_Report.pdf',
         image: { type: 'jpeg', quality: 0.95 },
         html2canvas: { 
             scale: 2, 
             useCORS: true,
-            windowWidth: 800 // Consistent with our CSS container
+            windowWidth: 800 
         },
         jsPDF: { 
             unit: 'mm', 
             format: 'a4', 
             orientation: 'portrait' 
         },
-        // Force the content to scale to fit within one page
-        pagebreak: { mode: 'avoid-all' } 
+        pagebreak: { mode: 'avoid-all' }
     };
 
-    // Use the worker API to capture and shrink if necessary
-    html2pdf().set(options).from(targetElement).toPdf().get('pdf').then(function (pdf) {
-        // Calculate dimensions to fit
-        const imgProps = pdf.getImageProperties(targetElement); // If canvas
-        // This forces the renderer to fit the content to the A4 page height
-        targetElement.style.transform = 'scale(0.9)'; 
-    }).save().then(() => {
-        // Remove the class after the PDF is saved
+    try {
+        // 2. Use the worker to handle the capture
+        const worker = html2pdf().set(options).from(targetElement);
+        
+        await worker.save();
+        console.log("PDF download triggered successfully.");
+    } catch (error) {
+        console.error("PDF Generation failed:", error);
+        alert("Failed to generate PDF. Please check console for errors.");
+    } finally {
+        // 3. Always remove the class, even if the error occurs
         targetElement.classList.remove('pdf-capture-mode');
-    });
+    }
 }
