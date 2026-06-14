@@ -162,25 +162,41 @@ input:checked + .slider:before { transform: translateX(20px); }
 .hidden { display: none !important; }
 
 /* 1. Prevent blank pages by ensuring the container height is flexible */
+/* ---------- PDF CAPTURE MODE ---------- */
+
+.pdf-capture-mode {
+    background: #ffffff !important;
+    padding: 24px !important;
+}
+
+
+/* Prevent large components from splitting */
+
+.tco-table{
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+/* Remove height restrictions during capture */
 #pdfSnapshotTarget {
     height: auto !important;
     min-height: auto !important;
+    max-height: none !important;
 }
 
-/* 2. Prevent cards, tables, and charts from being sliced in half across pages */
-.premium-card, 
-.tco-table, 
-canvas#tcoChart {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
+/* Common app container fixes */
+.pdf-capture-mode .main-container,
+.pdf-capture-mode .app-container,
+.pdf-capture-mode .content-wrapper {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+.pdf-capture-mode .pdf-download-btn {
+    display: none !important;
 }
 
-/* Add this to style.css */
-.pdf-capture-mode {
-    width: 800px !important;    /* Forces a consistent desktop width */
-    max-width: none !important; /* Prevents responsiveness from shrinking it */
-    margin: 0 auto !important;
-    padding: 40px !important;
-    background-color: white !important; /* Ensures no transparent background issues */
-    transform-origin: top left;
+#tcoChart {
+    width: 100% !important;
+    height: 260px !important;
 }

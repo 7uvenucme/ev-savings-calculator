@@ -506,7 +506,9 @@ async function generatePDFReport() {
         console.error("PDF Target element not found!");
         return;
     }
-
+console.log(
+  targetElement.scrollHeight
+);
     // 1. Add the class
     targetElement.classList.add('pdf-capture-mode');
 
@@ -523,8 +525,7 @@ async function generatePDFReport() {
             unit: 'mm', 
             format: 'a4', 
             orientation: 'portrait' 
-        },
-        pagebreak: { mode: 'avoid-all' }
+        }
     };
 
     try {
