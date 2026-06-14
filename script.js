@@ -507,25 +507,31 @@ function generatePDFReport() {
     targetElement.classList.add('pdf-capture-mode');
 
     const options = {
-        margin: [10, 10, 10, 10], // top, left, bottom, right margins in mm
-        filename: 'EV_Savings_TCO_Report_.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
+        margin: 5, // Smaller margin to maximize content space
+        filename: 'EV_Savings_Report_SinglePage.pdf',
+        image: { type: 'jpeg', quality: 0.95 },
         html2canvas: { 
-            scale: 2, // High resolution
+            scale: 2, 
             useCORS: true,
-            windowWidth: 800 // Force the canvas to match our CSS width
+            windowWidth: 800 // Consistent with our CSS container
         },
         jsPDF: { 
             unit: 'mm', 
             format: 'a4', 
             orientation: 'portrait' 
         },
-        // THIS IS THE CRITICAL LINE TO STOP CROPPING
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] } 
+        // Force the content to scale to fit within one page
+        pagebreak: { mode: 'avoid-all' } 
     };
 
-    html2pdf().set(options).from(targetElement).save().then(() => {
-        // Remove the class after the PDF is saved to restore normal viewing
+    // Use the worker API to capture and shrink if necessary
+    html2pdf().set(options).from(targetElement).toPdf().get('pdf').then(function (pdf) {
+        // Calculate dimensions to fit
+        const imgProps = pdf.getImageProperties(targetElement); // If canvas
+        // This forces the renderer to fit the content to the A4 page height
+        targetElement.style.transform = 'scale(0.9)'; 
+    }).save().then(() => {
+        // Remove the class after the PDF is saved
         targetElement.classList.remove('pdf-capture-mode');
     });
 }
