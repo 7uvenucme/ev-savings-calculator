@@ -141,18 +141,10 @@ input:checked + .slider:before { transform: translateX(20px); }
 .disclaimer-section { border-top: 1px solid var(--border-color); padding-top: 1.5rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.6; }
 .hidden { display: none !important; }
 
-/* Force the container to ignore page breaks */
-#pdfSnapshotTarget, 
-#pdfSnapshotTarget * {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-    display: block !important; /* Ensure it's treated as a block */
-}
-
-/* Force container height to match content */
+/* 1. Ensure the container isn't forced to a height (this causes blank pages) */
 #pdfSnapshotTarget {
     height: auto !important;
-    overflow: visible !important;
+    min-height: auto !important;
 }
 
 /* 2. Prevent cards or tables from being cut in half (this stops cropping) */
