@@ -2,16 +2,19 @@
 const SUPABASE_URL = 'https://jwuzpwglpqkohecxkeuf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3dXpwd2dscHFrb2hlY3hrZXVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNTQ3NTksImV4cCI6MjA5NjkzMDc1OX0.VGST1zYSae2-BHGoq2jXH7qOrPqMHCqR7atibbpd1f8';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-// 2. Global State Variables
+
+// 2. GLOBAL STATE
 let chart;
-let currentSpreadsheetVehicle = null;
 let vehiclesData = [];
 let statesData = [];
 let tradeInDatabase = {};
-let isManualValuationMode = false;
-const FIXED_5YR_SERVICE_SAVINGS = 60000;
+let currentSpreadsheetVehicle = null;
 
-// 3. Application Initialization
+// Base configuration limits
+const MAX_WEEKLY_KM = 1200;
+const MAX_MONTHLY_KM = 15000;
+
+// 3. BOOTSTRAP APP
 window.onload = async () => {
     try {
         // Fetch States
@@ -22,7 +25,7 @@ window.onload = async () => {
         const { data: vehicles } = await db.from('vehicles').select('*');
         if (vehicles) vehiclesData = vehicles;
 
-        // Fetch Resale Value matrix and structure it locally
+        // Fetch Resale Value matrix and structure it locally for V1 Exchange logic
         const { data: resale } = await db.from('resale_value').select('*');
         if (resale) {
             resale.forEach(row => {
@@ -38,19 +41,24 @@ window.onload = async () => {
             populateMakes();
         }
 
-        populateUI();
+        populateCoreDropdowns();
+        attachEventListeners();
 
     } catch (err) {
         console.error("Database connection error:", err);
+        alert("Failed to load database parameters. Please check your internet connection.");
     }
 };
 
-function populateUI() {
+// 4. UI POPULATION & EVENT LISTENERS
+function populateCoreDropdowns() {
     const vSelect = document.getElementById('vehicleSelect');
     const sSelect = document.getElementById('stateSelect');
-    vSelect.innerHTML = ''; 
-    sSelect.innerHTML = ''; 
     
+    vSelect.innerHTML = '<option value="" disabled selected>Select an eSUV variant...</option>';
+    sSelect.innerHTML = '<option value="" disabled selected>Select state...</option>';
+    
+    // Sort and populate Vehicles
     vehiclesData.forEach(v => {
         const option = document.createElement('option');
         option.value = JSON.stringify(v);
@@ -58,104 +66,157 @@ function populateUI() {
         vSelect.appendChild(option);
     });
     
+    // Populate States
     statesData.forEach(s => {
         const option = document.createElement('option');
-        option.value = JSON.stringify(s); // Store entire state obj
+        option.value = JSON.stringify(s);
         option.innerText = s.state_name;
         sSelect.appendChild(option);
     });
+
+    // Default Select XEV 9e Pack Three 79 kWh if it exists in the array
+    const defaultIndex = Array.from(vSelect.options).findIndex(opt => opt.innerText.includes("XEV 9e Pack Three 79"));
+    if (defaultIndex > -1) {
+        vSelect.selectedIndex = defaultIndex;
+        handleVehicleChange();
+    }
+}
+
+function attachEventListeners() {
+    // Stepper Controls
+    document.getElementById('btnDecDist').addEventListener('click', () => adjustDistance(-1));
+    document.getElementById('btnIncDist').addEventListener('click', () => adjustDistance(1));
+    document.getElementById('freqSelect').addEventListener('change', handleFrequencyChange);
+
+    // Fuel Type Pill Selection
+    document.getElementById('cardDiesel').addEventListener('click', () => selectFuelType('diesel'));
+    document.getElementById('cardPetrol').addEventListener('click', () => selectFuelType('petrol'));
+
+    // Driving Mix Slider
+    document.getElementById('routeSplitSlider').addEventListener('input', (e) => {
+        const highway = e.target.value;
+        const city = 100 - highway;
+        document.getElementById('cityLabel').innerText = `City: ${city}%`;
+        document.getElementById('highwayLabel').innerText = `Highway: ${highway}%`;
+        updateCalculations();
+    });
+
+    // Main Overrides & Toggles
+    document.getElementById('vehicleSelect').addEventListener('change', handleVehicleChange);
+    document.getElementById('stateSelect').addEventListener('change', updateCalculations);
+    document.getElementById('businessPurchaseCheck').addEventListener('change', toggleBusinessSection);
+    document.getElementById('corporateTaxRate').addEventListener('change', updateCalculations);
+    document.getElementById('exchangeCheck').addEventListener('change', toggleExchangeSection);
+    document.getElementById('fallbackToggleBtn').addEventListener('click', toggleValuationPath);
+
+    // Baseline Overrides with Masks
+    setupCurrencyMask('overrideIceExPrice', 'maskIceExPrice');
+    setupCurrencyMask('overrideEvExPrice', 'maskEvExPrice');
+    setupCurrencyMask('manualResaleInput', 'maskManualResale');
+    setupCurrencyMask('downPaymentInput', 'maskDownPayment');
+
+    // Advanced Assumptions
+    document.getElementById('toggleAssumptionsBtn').addEventListener('click', () => {
+        document.getElementById('baselineAccordion').classList.toggle('hidden');
+    });
+
+    // Attach update hooks to all advanced inputs
+    const advInputs = ['varPetrolPrice', 'varDieselPrice', 'varHomeCharge', 'varPublicCharge', 'varPetrolEff', 'varDieselEff', 'varEvEff', 'varEvSvc', 'varPetrolSvc', 'varDieselSvc', 'loanTenure', 'interestRate', 'odometerInput'];
+    advInputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', updateCalculations);
+    });
+
+    // PDF Generator
+    document.getElementById('btnDownloadPdf').addEventListener('click', generatePDFReport);
+}
+
+// 5. INTERACTION HANDLERS
+function selectFuelType(type) {
+    document.getElementById('cardDiesel').classList.toggle('selected', type === 'diesel');
+    document.getElementById('cardPetrol').classList.toggle('selected', type === 'petrol');
+    document.querySelector(`input[name="fuelType"][value="${type}"]`).checked = true;
     
+    // Update the baseline label
+    document.getElementById('lblSpreadsheetIcePrice').innerText = type === 'petrol' ? 'Petrol Ex-Sh' : 'Diesel Ex-Sh';
+    
+    // Refresh vehicle mapping if selected
     handleVehicleChange();
+}
+
+let currentDistance = 400;
+function adjustDistance(direction) {
+    const isMonthly = document.getElementById('freqSelect').value === 'monthly';
+    const step = isMonthly ? 100 : 50;
+    const max = isMonthly ? MAX_MONTHLY_KM : MAX_WEEKLY_KM;
+    
+    currentDistance += (step * direction);
+    if (currentDistance < step) currentDistance = step;
+    if (currentDistance > max) currentDistance = max;
+    
+    document.getElementById('distDisplay').innerText = currentDistance;
+    updateCalculations();
+}
+
+function handleFrequencyChange() {
+    const isMonthly = document.getElementById('freqSelect').value === 'monthly';
+    // Reset to sensible defaults on swap
+    currentDistance = isMonthly ? 1500 : 400;
+    document.getElementById('distDisplay').innerText = currentDistance;
+    updateCalculations();
 }
 
 function handleVehicleChange() {
     const selectEl = document.getElementById('vehicleSelect');
-    if(!selectEl.value) return;
+    if (!selectEl.value) return;
     
     currentSpreadsheetVehicle = JSON.parse(selectEl.value);
     const fuelType = document.querySelector('input[name="fuelType"]:checked').value;
     
-    document.getElementById('lblSpreadsheetEvPrice').innerText = `EV Ex-Sh`;
+    const iceExSh = fuelType === 'petrol' ? currentSpreadsheetVehicle.petrol_exsh_comp : currentSpreadsheetVehicle.diesel_exsh_comp;
     
-    if (fuelType === 'petrol') {
-        document.getElementById('lblSpreadsheetIcePrice').innerText = `Petrol Ex-Sh`;
-        document.getElementById('overrideIceExPrice').value = currentSpreadsheetVehicle.petrol_exsh_comp;
-    } else {
-        document.getElementById('lblSpreadsheetIcePrice').innerText = `Diesel Ex-Sh`;
-        document.getElementById('overrideIceExPrice').value = currentSpreadsheetVehicle.diesel_exsh_comp;
-    }
-    
+    document.getElementById('overrideIceExPrice').value = iceExSh;
     document.getElementById('overrideEvExPrice').value = currentSpreadsheetVehicle.ex_showroom_ev;
-    updateCalculations();
-}
-
-function handleFrequencyToggle() {
-    const isMonthly = document.getElementById('freqM').checked;
-    const slider = document.getElementById('usageSlider');
-    const numBox = document.getElementById('distanceNum');
-    const scaleDeck = document.getElementById('distanceScaleDeck');
     
-    if (isMonthly) {
-        slider.max = 15000;
-        slider.step = 500;
-        slider.value = 5000;
-        scaleDeck.className = "scale-track scale-track-monthly";
-    } else {
-        slider.max = 1200;
-        slider.step = 50;
-        slider.value = 400;
-        scaleDeck.className = "scale-track scale-track-weekly";
-    }
-    numBox.value = slider.value;
-    updateCalculations();
-}
-
-function handleSliderDistanceInput() {
-    document.getElementById('distanceNum').value = document.getElementById('usageSlider').value;
-    updateCalculations();
-}
-
-function handleManualDistanceInput() {
-    const numBox = document.getElementById('distanceNum');
-    let val = parseInt(numBox.value) || 0;
-    const isMonthly = document.getElementById('freqM').checked;
-    const maxLimit = isMonthly ? 15000 : 1200;
+    // Trigger visual mask updates
+    document.getElementById('overrideIceExPrice').dispatchEvent(new Event('input'));
+    document.getElementById('overrideEvExPrice').dispatchEvent(new Event('input'));
     
-    if (val > maxLimit) {
-        val = maxLimit;
-        numBox.value = maxLimit;
-    }
-    document.getElementById('usageSlider').value = val; 
     updateCalculations();
 }
 
-function handleRouteSplitChange() {
-    const highwayVal = document.getElementById('routeSplitSlider').value;
-    const cityVal = 100 - highwayVal;
-    document.getElementById('cityLabel').innerText = `City: ${cityVal}%`;
-    document.getElementById('highwayLabel').innerText = `Highway: ${highwayVal}%`;
+function toggleBusinessSection() {
+    const isChecked = document.getElementById('businessPurchaseCheck').checked;
+    document.getElementById('businessOptionsContainer').classList.toggle('hidden', !isChecked);
+    document.getElementById('rowCorporateTax').classList.toggle('hidden', !isChecked);
     updateCalculations();
 }
 
-// Finance Section Handlers (From V1)
 function toggleExchangeSection() {
     const isChecked = document.getElementById('exchangeCheck').checked;
     document.getElementById('exchangeSection').classList.toggle('hidden', !isChecked);
     updateCalculations();
 }
-function toggleIceCompareSection() {
-    const isChecked = document.getElementById('iceCompareCheck').checked;
-    document.getElementById('iceCompareSection').classList.toggle('hidden', !isChecked);
-    updateCalculations();
-}
+
 function toggleValuationPath() {
     isManualValuationMode = !isManualValuationMode;
     document.getElementById('matrixEvaluationContainer').classList.toggle('hidden', isManualValuationMode);
     document.getElementById('manualValuationContainer').classList.toggle('hidden', !isManualValuationMode);
-    const switchBtn = document.getElementById('fallbackToggleBtn');
-    switchBtn.innerText = isManualValuationMode ? "Use guided vehicle list selection" : "Can't find your car? Enter manually";
+    document.getElementById('fallbackToggleBtn').innerText = isManualValuationMode ? "Use guided vehicle list selection" : "Can't find your car? Enter manually";
     updateCalculations();
 }
+
+function setupCurrencyMask(inputId, maskId) {
+    const input = document.getElementById(inputId);
+    const mask = document.getElementById(maskId);
+    
+    input.addEventListener('input', (e) => {
+        let val = parseFloat(e.target.value) || 0;
+        mask.innerText = "₹ " + val.toLocaleString('en-IN');
+        updateCalculations(); // Recalculate on manual override
+    });
+}
+
+// Resale Matrix Helpers
 function populateMakes() {
     const makeSelect = document.getElementById('makeSelect');
     makeSelect.innerHTML = '<option value="">Select Make</option>';
@@ -163,6 +224,7 @@ function populateMakes() {
         let opt = document.createElement('option'); opt.value = make; opt.innerText = make;
         makeSelect.appendChild(opt);
     });
+    makeSelect.addEventListener('change', updateModels);
 }
 function updateModels() {
     const make = document.getElementById('makeSelect').value;
@@ -175,6 +237,7 @@ function updateModels() {
             modelSelect.appendChild(opt);
         });
     }
+    modelSelect.addEventListener('change', updateYears);
     updateCalculations();
 }
 function updateYears() {
@@ -188,129 +251,151 @@ function updateYears() {
             yearSelect.appendChild(opt);
         });
     }
+    yearSelect.addEventListener('change', updateCalculations);
     updateCalculations();
 }
-function helperCalculateEmi(principal, annualRate, tenureYears) {
-    if (principal <= 0) return 0;
-    const monthlyRate = (annualRate / 100) / 12;
-    const totalMonths = tenureYears * 12;
-    if (monthlyRate === 0) return principal / totalMonths;
-    return (principal * monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1);
-}
-function formatValueToLakhs(absoluteAmount) {
-    const lakhsValue = absoluteAmount / 100000;
-    return '₹ ' + lakhsValue.toFixed(2) + ' Lakh';
-}
 
-function fetchCustomVars() {
-    return {
-        petrolPrice: parseFloat(document.getElementById('varPetrolPrice').value),
-        dieselPrice: parseFloat(document.getElementById('varDieselPrice').value),
-        homeCharge: parseFloat(document.getElementById('varHomeCharge').value),
-        publicCharge: parseFloat(document.getElementById('varPublicCharge').value),
-        petrolEff: parseFloat(document.getElementById('varPetrolEff').value),
-        dieselEff: parseFloat(document.getElementById('varDieselEff').value),
-        evEff: parseFloat(document.getElementById('varEvEff').value),
-        evSvcRate: parseFloat(document.getElementById('varEvSvc').value),
-        petrolSvcRate: parseFloat(document.getElementById('varPetrolSvc').value),
-        dieselSvcRate: parseFloat(document.getElementById('varDieselSvc').value),
-        overrideIceEx: parseFloat(document.getElementById('overrideIceExPrice').value),
-        overrideEvEx: parseFloat(document.getElementById('overrideEvExPrice').value)
-    };
-}
-
+// 6. CORE MATH ENGINE
 function updateCalculations() {
     if (!currentSpreadsheetVehicle) return;
     
-    // Core Engine Logic mapped locally
-    const stateObj = document.getElementById('stateSelect').value ? JSON.parse(document.getElementById('stateSelect').value) : {overhead_multiplier_ice: 0.12, overhead_multiplier_ev: 0.05};
-    const distance = parseFloat(document.getElementById('distanceNum').value) || 0;
-    const isMonthly = document.getElementById('freqM').checked;
+    // State Logic
+    const stateObj = document.getElementById('stateSelect').value ? JSON.parse(document.getElementById('stateSelect').value) : {overhead_multiplier_ice: 0.20, overhead_multiplier_ev: 0.05};
+    
+    // Usage Logic
+    const isMonthly = document.getElementById('freqSelect').value === 'monthly';
+    const annualMileage = isMonthly ? currentDistance * 12 : currentDistance * 52;
+    const highwaySplit = parseFloat(document.getElementById('routeSplitSlider').value) / 100;
+    const citySplit = 1 - highwaySplit;
+    
+    // Fuel Setup
     const fuelType = document.querySelector('input[name="fuelType"]:checked').value;
-    
-    const annualMileage = isMonthly ? distance * 12 : distance * 52;
-    const highwaySplit = parseFloat(document.getElementById('routeSplitSlider').value);
-    
     const isPetrol = (fuelType === 'petrol');
-    const customVars = fetchCustomVars();
     
-    const iceExShowroom = customVars.overrideIceEx || (isPetrol ? currentSpreadsheetVehicle.petrol_exsh_comp : currentSpreadsheetVehicle.diesel_exsh_comp);
-    const evExShowroom = customVars.overrideEvEx || currentSpreadsheetVehicle.ex_showroom_ev;
+    // Overrides
+    const iceExShowroom = parseFloat(document.getElementById('overrideIceExPrice').value) || 0;
+    const evExShowroom = parseFloat(document.getElementById('overrideEvExPrice').value) || 0;
+    
+    // Custom Variables
+    const petrolPrice = parseFloat(document.getElementById('varPetrolPrice').value);
+    const dieselPrice = parseFloat(document.getElementById('varDieselPrice').value);
+    const homeCharge = parseFloat(document.getElementById('varHomeCharge').value);
+    const publicCharge = parseFloat(document.getElementById('varPublicCharge').value);
+    
+    const iceEff = isPetrol ? parseFloat(document.getElementById('varPetrolEff').value) : parseFloat(document.getElementById('varDieselEff').value);
+    const evEff = parseFloat(document.getElementById('varEvEff').value);
+    
+    // blended charging cost
+    const blendedUnitCost = (citySplit * homeCharge) + (highwaySplit * publicCharge);
+    
+    // Cost per KM
+    const iceCostPerKm = (isPetrol ? petrolPrice : dieselPrice) / iceEff;
+    const evCostPerKm = blendedUnitCost / evEff;
 
-    // TCO Timeline Calculations
+    // Day 0 Taxes & Overheads
+    const iceTaxAmt = iceExShowroom * stateObj.overhead_multiplier_ice;
+    const evTaxAmt = evExShowroom * stateObj.overhead_multiplier_ev;
+    
+    let iceCumulative = iceExShowroom + iceTaxAmt;
+    let evCumulative = evExShowroom + evTaxAmt;
+
+    // Business Tax Parameters
+    const isBusiness = document.getElementById('businessPurchaseCheck').checked;
+    const corpTaxRate = parseFloat(document.getElementById('corporateTaxRate').value);
+    let iceWdv = iceExShowroom;
+    let evWdv = evExShowroom;
+    let totalCorpTaxSaved = 0;
+
+    // Timeline Generation
     let timeline = [];
-    const fuelPrice = isPetrol ? customVars.petrolPrice : customVars.dieselPrice;
-    const efficiency = isPetrol ? customVars.petrolEff : customVars.dieselEff;
-    const iceFuelCostPerKm = fuelPrice / efficiency;
     
-    const highwayRatio = highwaySplit / 100;
-    const cityRatio = 1 - highwayRatio;
-    const blendedEvUnitCost = (cityRatio * customVars.homeCharge) + (highwayRatio * customVars.publicCharge);
-    const evEnergyCostPerKm = blendedEvUnitCost / customVars.evEff;
-
-    let iceTax = iceExShowroom * stateObj.overhead_multiplier_ice;
-    let evTax = evExShowroom * stateObj.overhead_multiplier_ev;
-    let iceCumulative = iceExShowroom + iceTax;
-    let evCumulative = evExShowroom + evTax;
-
-    timeline.push({ label: "Day 1 Upfront Cost", ice: Math.round(iceCumulative), ev: Math.round(evCumulative), isCumulativeCost: true, isSeparator: true });
+    // Base Milestones
+    timeline.push({ label: "Ex-sh.", ice: Math.round(iceExShowroom), ev: Math.round(evExShowroom), isCumulativeCost: false, isSeparator: false });
+    timeline.push({ label: "Road Tax, Ins. & other charges", ice: Math.round(iceTaxAmt), ev: Math.round(evTaxAmt), isCumulativeCost: false, isSeparator: false });
+    timeline.push({ label: "Day 0 Upfront Cost", ice: Math.round(iceCumulative), ev: Math.round(evCumulative), isCumulativeCost: true, isSeparator: true });
 
     let totalIceFuelSpent = 0; let totalEvEnergySpent = 0;
     let totalIceSvcSpent = 0; let totalEvSvcSpent = 0;
     let breakevenYear = null;
 
-    let tempBaseSvcEvRate = customVars.evSvcRate;
-    let tempBaseSvcIceRate = isPetrol ? customVars.petrolSvcRate : customVars.dieselSvcRate;
+    let tempEvSvcRate = parseFloat(document.getElementById('varEvSvc').value);
+    let tempIceSvcRate = isPetrol ? parseFloat(document.getElementById('varPetrolSvc').value) : parseFloat(document.getElementById('varDieselSvc').value);
 
+    // 7 Year Projection Loop
     for (let year = 1; year <= 7; year++) {
-        let currentYearIceFuel = annualMileage * iceFuelCostPerKm;
-        let currentYearEvEnergy = annualMileage * evEnergyCostPerKm;
+        let yrIceFuel = annualMileage * iceCostPerKm;
+        let yrEvEnergy = annualMileage * evCostPerKm;
         
-        let currentYearIceSvc = annualMileage * tempBaseSvcIceRate;
-        let currentYearEvSvc = annualMileage * tempBaseSvcEvRate;
+        let yrIceSvc = annualMileage * tempIceSvcRate;
+        let yrEvSvc = annualMileage * tempEvSvcRate;
         
-        totalIceFuelSpent += currentYearIceFuel;
-        totalEvEnergySpent += currentYearEvEnergy;
-        totalIceSvcSpent += currentYearIceSvc;
-        totalEvSvcSpent += currentYearEvSvc;
+        totalIceFuelSpent += yrIceFuel;
+        totalEvEnergySpent += yrEvEnergy;
+        totalIceSvcSpent += yrIceSvc;
+        totalEvSvcSpent += yrEvSvc;
         
-        iceCumulative += currentYearIceFuel + currentYearIceSvc;
-        evCumulative += currentYearEvEnergy + currentYearEvSvc;
+        iceCumulative += (yrIceFuel + yrIceSvc);
+        evCumulative += (yrEvEnergy + yrEvSvc);
 
-        tempBaseSvcEvRate *= 1.05;
-        tempBaseSvcIceRate *= 1.20;
+        // Corporate Tax Shield WDV Logic
+        let yearTaxNote = "";
+        if (isBusiness) {
+            let iceDepreciation = iceWdv * 0.15;
+            let evDepreciation = evWdv * 0.40;
+            
+            let iceTaxShield = iceDepreciation * corpTaxRate;
+            let evTaxShield = evDepreciation * corpTaxRate;
+            
+            // Subtracting the actual cash saved from the cumulative out-of-pocket
+            iceCumulative -= iceTaxShield;
+            evCumulative -= evTaxShield;
+            
+            totalCorpTaxSaved += (evTaxShield - iceTaxShield);
+            
+            iceWdv -= iceDepreciation;
+            evWdv -= evDepreciation;
+            
+            yearTaxNote = `<br><span style="font-size:10px; color:var(--text-secondary);">(incl. ₹${((evTaxShield - iceTaxShield)/100000).toFixed(2)}L Tax Saved)</span>`;
+        }
+
+        tempEvSvcRate *= 1.05;
+        tempIceSvcRate *= 1.20;
 
         if (evCumulative <= iceCumulative && breakevenYear === null) {
-            let prevYearIce = iceCumulative - (currentYearIceFuel + currentYearIceSvc);
-            let prevYearEv = evCumulative - (currentYearEvEnergy + currentYearEvSvc);
+            // Rough linear interpolation for month of crossover
+            let prevYearIce = iceCumulative - (yrIceFuel + yrIceSvc);
+            let prevYearEv = evCumulative - (yrEvEnergy + yrEvSvc);
             let prevDiff = prevYearEv - prevYearIce;
-            let catchupRate = (currentYearIceFuel + currentYearIceSvc) - (currentYearEvEnergy + currentYearEvSvc);
+            let catchupRate = (yrIceFuel + yrIceSvc) - (yrEvEnergy + yrEvSvc);
             breakevenYear = (year - 1) + (prevDiff / catchupRate);
         }
 
-        timeline.push({ label: "End of Year " + year, ice: Math.round(iceCumulative), ev: Math.round(evCumulative), isCumulativeCost: true, isSeparator: false });
+        timeline.push({ 
+            label: "Year " + year, 
+            ice: Math.round(iceCumulative), 
+            ev: Math.round(evCumulative), 
+            isCumulativeCost: true, 
+            isSeparator: false,
+            note: yearTaxNote
+        });
     }
 
     const exShowroomPremium = iceExShowroom - evExShowroom; 
-    const taxSavings = iceTax - evTax; 
+    const taxSavings = iceTaxAmt - evTaxAmt; 
     const fuelSavings = totalIceFuelSpent - totalEvEnergySpent;
     const serviceSavings = totalIceSvcSpent - totalEvSvcSpent;
-    const netTcoResult = exShowroomPremium + taxSavings + fuelSavings + serviceSavings;
+    
+    const netTcoResult = exShowroomPremium + taxSavings + fuelSavings + serviceSavings + totalCorpTaxSaved;
 
-    const res = {
-        timeline: timeline,
-        breakeven: breakevenYear ? breakevenYear.toFixed(1) : null,
-        ledger: { exShowroomPremium, taxSavings, fuelSavings, serviceSavings, netTcoResult }
-    };
+    // Render Output
+    renderTableAndLedger(timeline, { exShowroomPremium, taxSavings, fuelSavings, serviceSavings, totalCorpTaxSaved, netTcoResult }, breakevenYear);
+    renderChart(timeline);
 
-    renderTableAndLedger(res);
-    renderChart(res.timeline);
-
-    // --- EXECUTE V1 FINANCING CALCULATIONS ---
+    // EMI & Exchange Calculation Block
     let finalTradeInEquity = 0;
     if (document.getElementById('exchangeCheck').checked) {
         if (isManualValuationMode) {
-            finalTradeInEquity = (parseFloat(document.getElementById('manualResaleInput').value) || 0) * 100000;
+            finalTradeInEquity = parseFloat(document.getElementById('manualResaleInput').value) || 0;
         } else {
             const make = document.getElementById('makeSelect').value;
             const model = document.getElementById('modelSelect').value;
@@ -322,17 +407,19 @@ function updateCalculations() {
             }
         }
     }
-    document.getElementById('resaleValueText').innerText = formatValueToLakhs(finalTradeInEquity);
+    document.getElementById('resaleValueText').innerText = "₹ " + finalTradeInEquity.toLocaleString('en-IN');
 
-    const inputDownPaymentLakhs = parseFloat(document.getElementById('downPaymentInput').value) || 0;
-    const rawDownpaymentAmt = inputDownPaymentLakhs * 100000;
+    const rawDownpaymentAmt = parseFloat(document.getElementById('downPaymentInput').value) || 0;
     const tenureYears = parseInt(document.getElementById('loanTenure').value);
     const interestRateVal = parseFloat(document.getElementById('interestRate').value);
     
-    // Using timeline[0] which is "Day 1 Upfront Cost" to grab total EV on-road cost
-    const evOnRoadTotal = res.timeline[0].ev;
+    // Day 0 EV Cost
+    const evOnRoadTotal = evExShowroom + evTaxAmt;
     const evPrincipal = Math.max(0, evOnRoadTotal - rawDownpaymentAmt - finalTradeInEquity);
-    const calculatedMonthlyEMI = helperCalculateEmi(evPrincipal, interestRateVal, tenureYears);
+    
+    const monthlyRate = (interestRateVal / 100) / 12;
+    const totalMonths = tenureYears * 12;
+    const calculatedMonthlyEMI = evPrincipal > 0 ? (evPrincipal * monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1) : 0;
     
     const quoteBox = document.getElementById('imaginationQuote');
     if (evPrincipal <= 0) {
@@ -340,79 +427,65 @@ function updateCalculations() {
     } else {
         quoteBox.innerHTML = `Financing a net principal of <strong>₹ ${(evPrincipal / 100000).toFixed(2)} Lakh</strong> over ${tenureYears} years. Estimated installment matches <strong>₹ ${Math.round(calculatedMonthlyEMI).toLocaleString('en-IN')} / month</strong>.`;
     }
-
-    if (document.getElementById('iceCompareCheck').checked) {
-        const iceExShowroomAmt = (parseFloat(document.getElementById('iceExShowroomInput').value) || 0) * 100000;
-        const iceOnRoadAmt = iceExShowroomAmt * (1 + stateObj.overhead_multiplier_ice);
-        const upfrontPremiumDelta = evOnRoadTotal - iceOnRoadAmt;
-        const icePrincipal = Math.max(0, iceOnRoadAmt - rawDownpaymentAmt - finalTradeInEquity);
-        const calculatedIceEMI = helperCalculateEmi(icePrincipal, interestRateVal, tenureYears);
-        
-        const monthlyEmiGap = calculatedMonthlyEMI - calculatedIceEMI;
-        const monthlyOpsSavings = (fuelSavings + serviceSavings) / 84; // Monthly operational saving over 7 years (84 months)
-        const operationalEmiNetBalance = monthlyOpsSavings - monthlyEmiGap;
-        
-        document.getElementById('icePricePremiumText').innerText = (upfrontPremiumDelta >= 0 ? '₹ ' : '-₹ ') + Math.abs(upfrontPremiumDelta / 100000).toFixed(2) + ' Lakh';
-        document.getElementById('iceEmiPremiumText').innerText = (monthlyEmiGap >= 0 ? '₹ ' : '-₹ ') + Math.abs(Math.round(monthlyEmiGap)).toLocaleString('en-IN') + ' / month';
-        
-        const comparisonStatusText = document.getElementById('iceComparisonStatusText');
-        const badgeTarget = document.getElementById('breakevenBadgeTarget');
-        if (operationalEmiNetBalance > 0) {
-            comparisonStatusText.innerHTML = `Your monthly fuel/service savings completely surpass the financing difference by <strong>₹ ${Math.round(operationalEmiNetBalance).toLocaleString('en-IN')} / month</strong>!`;
-            badgeTarget.innerHTML = `<span class="breakeven-badge badge-success">Immediate Breakeven Retained</span>`;
-        } else {
-            const rawBreakevenMonths = Math.abs(upfrontPremiumDelta) / Math.max(1, monthlyOpsSavings);
-            comparisonStatusText.innerHTML = `Upfront premium delta recovers through operation yields in approx <strong>${(rawBreakevenMonths / 12).toFixed(1)} Years</strong>.`;
-            badgeTarget.innerHTML = `<span class="breakeven-badge badge-alert">Breakeven Profile Active</span>`;
-        }
-    }
 }
 
-function renderTableAndLedger(res) {
+// 7. RENDER HELPER FUNCTIONS
+function formatToLakhs(number) {
+    return "₹" + (number / 100000).toFixed(2) + " L";
+}
+
+function renderTableAndLedger(timeline, ledger, breakevenYear) {
+    // LEDGER UI
     const ledgerEx = document.getElementById('ledgerExEx');
-    if (res.ledger.exShowroomPremium < 0) {
+    if (ledger.exShowroomPremium < 0) {
         ledgerEx.className = "val-negative";
-        ledgerEx.innerText = "- ₹" + Math.abs(Math.round(res.ledger.exShowroomPremium)).toLocaleString('en-IN');
+        ledgerEx.innerText = "- ₹" + Math.abs(Math.round(ledger.exShowroomPremium)).toLocaleString('en-IN');
     } else {
         ledgerEx.className = "val-positive";
-        ledgerEx.innerText = "+ ₹" + Math.round(res.ledger.exShowroomPremium).toLocaleString('en-IN');
+        ledgerEx.innerText = "+ ₹" + Math.round(ledger.exShowroomPremium).toLocaleString('en-IN');
     }
-    document.getElementById('ledgerTax').innerText = "₹" + Math.round(res.ledger.taxSavings).toLocaleString('en-IN');
-    document.getElementById('ledgerFuel').innerText = "₹" + Math.round(res.ledger.fuelSavings).toLocaleString('en-IN');
-    document.getElementById('ledgerSvc').innerText = "₹" + Math.round(res.ledger.serviceSavings).toLocaleString('en-IN');
+    
+    document.getElementById('ledgerTax').innerText = "₹" + Math.round(ledger.taxSavings).toLocaleString('en-IN');
+    document.getElementById('ledgerFuel').innerText = "₹" + Math.round(ledger.fuelSavings).toLocaleString('en-IN');
+    document.getElementById('ledgerSvc').innerText = "₹" + Math.round(ledger.serviceSavings).toLocaleString('en-IN');
+    
+    if(ledger.totalCorpTaxSaved > 0) {
+        document.getElementById('ledgerCorporateTax').innerText = "₹" + Math.round(ledger.totalCorpTaxSaved).toLocaleString('en-IN');
+    }
     
     const totalNode = document.getElementById('ledgerTotal');
-    totalNode.className = "val-positive";
-    totalNode.innerText = "₹" + Math.round(res.ledger.netTcoResult).toLocaleString('en-IN');
+    totalNode.innerText = "₹" + Math.round(ledger.netTcoResult).toLocaleString('en-IN');
 
+    // BREAKEVEN HERO
     const bCard = document.getElementById('breakevenCard');
-    if (res.breakeven) {
+    if (breakevenYear && breakevenYear <= 7) {
         bCard.classList.remove('hidden');
-        document.getElementById('breakevenVal').innerText = res.breakeven + " Years";
+        document.getElementById('breakevenVal').innerText = breakevenYear.toFixed(1) + " Years";
     } else {
         bCard.classList.add('hidden');
     }
 
+    // TABLE UI
     const tbody = document.getElementById('tcoTableBody');
     tbody.innerHTML = '';
-    res.timeline.forEach(row => {
+    timeline.forEach(row => {
         const tr = document.createElement('tr');
         let iceClass = ''; let evClass = ''; let marginText = '';
 
         if (row.ice < row.ev) {
             iceClass = 'class="leader-green"';
-            marginText = `ICE +₹${(row.ev - row.ice).toLocaleString('en-IN')}`;
+            marginText = `ICE saves ${formatToLakhs(row.ev - row.ice)}`;
         } else if (row.ev < row.ice) {
             evClass = 'class="leader-green"';
-            marginText = `EV +₹${(row.ice - row.ev).toLocaleString('en-IN')}`;
+            marginText = `EV saves ${formatToLakhs(row.ice - row.ev)}`;
         } else {
             marginText = '-';
         }
 
         tr.innerHTML = `
-            <td><strong>${row.label}</strong></td>
-            <td ${iceClass}>₹${row.ice.toLocaleString('en-IN')}</td>
-            <td ${evClass}>₹${row.ev.toLocaleString('en-IN')}</td>
+            <td><strong>${row.label}</strong>${row.note || ""}</td>
+            <td ${iceClass}>${formatToLakhs(row.ice)}</td>
+            <td ${evClass}>${formatToLakhs(row.ev)}</td>
             <td>${marginText}</td>
         `;
         tbody.appendChild(tr);
@@ -436,8 +509,8 @@ function renderChart(timelineData) {
         data: {
             labels: plotPoints.map(d => d.label),
             datasets: [
-                { label: 'eSUV Total Outlay', data: plotPoints.map(d => d.ev), borderColor: '#00875a', backgroundColor: '#00875a', fill: false, tension: 0.1 },
-                { label: 'ICE Car Total Outlay', data: plotPoints.map(d => d.ice), borderColor: '#0066cc', backgroundColor: '#0066cc', fill: false, tension: 0.1 }
+                { label: 'Mahindra eSUV', data: plotPoints.map(d => d.ev), borderColor: '#00875a', backgroundColor: '#00875a', fill: false, tension: 0.1 },
+                { label: 'ICE', data: plotPoints.map(d => d.ice), borderColor: '#0066cc', backgroundColor: '#0066cc', fill: false, tension: 0.1 }
             ]
         },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
