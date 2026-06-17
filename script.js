@@ -510,13 +510,16 @@ async function generatePDFReport() {
         // Lowering scale slightly on iOS prevents Safari from crashing the canvas memory allocation limit
         const dynamicScale = isIOS ? 1.5 : 2;
 
-        const fullCanvas = await html2canvas(target, {
-            scale: dynamicScale,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            scrollX: 0,
-            scrollY: 0
-        });
+    const fullCanvas = await html2canvas(target, {
+        scale: dynamicScale,
+        useCORS: true,                  // Crucial for loading external images/CDNs
+        allowTaint: false,              // CRITICAL: Prevent tainted canvases from breaking export
+        foreignObjectRendering: false,  // Forces a standard render path, safer for Safari/iOS
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        logging: false                  // Optional: Keeps your console clean in production
+    });
 
         // Pull the jsPDF constructor from the window.jspdf object (required by jspdf.umd.min.js)
         const { jsPDF } = window.jspdf;
