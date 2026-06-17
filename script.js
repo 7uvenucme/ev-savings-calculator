@@ -502,36 +502,53 @@ function renderChart(timelineData) {
 }
 async function generatePDFReport() {
     const target = document.getElementById('pdfSnapshotTarget');
+    if (!target) {
+        alert("Error: Snapshot target element '#pdfSnapshotTarget' not found.");
+        return;
+    }
+
     try {
-// 1. Find your Chart instance and convert it into a static image
-    // Note: Replace 'myChart' with whatever variable name you used to create your Chart.js instance
-    if (window.myChart) {
-        const chartCanvas = document.getElementById('yourChartCanvasId'); // Put your actual canvas ID here
-        const chartImageObj = new Image();
-        
-        // Convert the chart to a safe, local base64 data string
-        chartImageObj.src = window.myChart.toBase64Image();
-        chartImageObj.style.width = chartCanvas.offsetWidth + 'px';
-        chartImageObj.style.height = chartCanvas.offsetHeight + 'px';
-        
-        // Temporarily swap the live canvas with the safe image element
-        chartCanvas.parentNode.replaceChild(chartImageObj, chartCanvas);
+        let chartCanvas = null;
+        let chartImageObj = null;
 
-    const fullCanvas = await html2canvas(target, {
-        scale: dynamicScale,
-        useCORS: true,                  // Crucial for loading external images/CDNs
-        allowTaint: false,              // CRITICAL: Prevent tainted canvases from breaking export
-        foreignObjectRendering: false,  // Forces a standard render path, safer for Safari/iOS
-        backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0,
-        logging: false                  // Optional: Keeps your console clean in production
-    });
+        // 1. Find your Chart instance and convert it into a static image
+        // Note: Make sure 'myChart' matches the exact variable name of your Chart.js instance
+        if (window.myChart) {
+            chartCanvas = document.getElementById('yourChartCanvasId'); // Put your actual canvas ID here
+            
+            if (chartCanvas) {
+                chartImageObj = new Image();
+                // Convert the chart to a safe, local base64 data string
+                chartImageObj.src = window.myChart.toBase64Image();
+                chartImageObj.style.width = chartCanvas.offsetWidth + 'px';
+                chartImageObj.style.height = chartCanvas.offsetHeight + 'px';
+                
+                // Temporarily swap the live canvas with the safe image element
+                chartCanvas.parentNode.replaceChild(chartImageObj, chartCanvas);
+            }
+        }
 
-    // 3. Swap it back so the interactive chart returns after the PDF builds
-        chartImageObj.parentNode.replaceChild(chartCanvas, chartImageObj);
+        // Define dynamicScale if it's not declared globally
+        const scaleValue = typeof dynamicScale !== 'undefined' ? dynamicScale : 2;
 
-        // Pull the jsPDF constructor from the window.jspdf object (required by jspdf.umd.min.js)
+        // 2. Capture the element using html2canvas
+        const fullCanvas = await html2canvas(target, {
+            scale: scaleValue,
+            useCORS: true,                 // Crucial for loading external images/CDNs
+            allowTaint: false,              // CRITICAL: Prevent tainted canvases from breaking export
+            foreignObjectRendering: false,  // Forces a standard render path, safer for Safari/iOS
+            backgroundColor: '#ffffff',
+            scrollX: 0,
+            scrollY: 0,
+            logging: false                  // Keeps your console clean
+        });
+
+        // 3. Swap it back so the interactive chart returns after the PDF builds
+        if (chartCanvas && chartImageObj && chartImageObj.parentNode) {
+            chartImageObj.parentNode.replaceChild(chartCanvas, chartImageObj);
+        }
+
+        // Pull the jsPDF constructor from the window.jspdf object
         const { jsPDF } = window.jspdf;
 
         const pdf = new jsPDF({
@@ -554,7 +571,7 @@ async function generatePDFReport() {
         let pageIndex = 0;
         let renderedHeight = 0;
 
-        // Your exact canvas chunking loop - preserved perfectly
+        // Canvas chunking loop
         while (renderedHeight < fullCanvas.height) {
             const pageCanvas = document.createElement('canvas');
             const pageCtx = pageCanvas.getContext('2d');
@@ -578,7 +595,6 @@ async function generatePDFReport() {
             );
 
             const imgData = pageCanvas.toDataURL('image/jpeg', 0.95);
-
             const imgHeightMM = (pageCanvas.height * usableWidth) / pageCanvas.width;
 
             if (pageIndex > 0) {
@@ -598,23 +614,22 @@ async function generatePDFReport() {
             pageIndex++;
         }
 
-        console.log(fullCanvas.width, fullCanvas.height);
+        console.log("Canvas dimensions captured:", fullCanvas.width, fullCanvas.height);
 
-        // 2. Platform-Specific Action Routing
-        if (isIOS) {
-            // iOS blocks direct triggers like pdf.save(). 
-            // Instead, compile it to a blob and open it natively in a preview window.
+        // Detect iOS platform safely if not globally declared
+        const iosCheck = typeof isIOS !== 'undefined' ? isIOS : /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+        // 4. Platform-Specific Action Routing
+        if (iosCheck) {
+            // iOS blocks direct triggers like pdf.save(). Compile to blob & preview natively.
             const blobPDF = pdf.output('blob');
             const blobUrl = URL.createObjectURL(blobPDF);
-            
-            // Redirect the window view into the PDF stream. 
-            // From here, users tap Safari's standard Share Sheet icon to "Save to Files" or share.
             window.location.href = blobUrl;
         } else {
             // Unaffected desktop/Android behavior stays completely original
             pdf.save('EV_Savings_Report.pdf');
         }
-    }
+
     } catch (err) {
         console.error("Detailed PDF Error:", err);
         alert('PDF generation failed: ' + err.message);
