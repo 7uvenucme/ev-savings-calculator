@@ -614,10 +614,9 @@ async function generatePDFReport() {
             // Unaffected desktop/Android behavior stays completely original
             pdf.save('EV_Savings_Report.pdf');
         }
-
+    }
     } catch (err) {
         console.error("Detailed PDF Error:", err);
         alert('PDF generation failed: ' + err.message);
     }
-}
 }
