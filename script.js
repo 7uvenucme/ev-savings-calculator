@@ -503,12 +503,19 @@ function renderChart(timelineData) {
 async function generatePDFReport() {
     const target = document.getElementById('pdfSnapshotTarget');
     try {
-        // 1. Detect if the device is running iOS (iPhone, iPad, or iPod)
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-        // Lowering scale slightly on iOS prevents Safari from crashing the canvas memory allocation limit
-        const dynamicScale = isIOS ? 1.5 : 2;
+// 1. Find your Chart instance and convert it into a static image
+    // Note: Replace 'myChart' with whatever variable name you used to create your Chart.js instance
+    if (window.myChart) {
+        const chartCanvas = document.getElementById('yourChartCanvasId'); // Put your actual canvas ID here
+        const chartImageObj = new Image();
+        
+        // Convert the chart to a safe, local base64 data string
+        chartImageObj.src = window.myChart.toBase64Image();
+        chartImageObj.style.width = chartCanvas.offsetWidth + 'px';
+        chartImageObj.style.height = chartCanvas.offsetHeight + 'px';
+        
+        // Temporarily swap the live canvas with the safe image element
+        chartCanvas.parentNode.replaceChild(chartImageObj, chartCanvas);
 
     const fullCanvas = await html2canvas(target, {
         scale: dynamicScale,
@@ -520,6 +527,9 @@ async function generatePDFReport() {
         scrollY: 0,
         logging: false                  // Optional: Keeps your console clean in production
     });
+
+    // 3. Swap it back so the interactive chart returns after the PDF builds
+        chartImageObj.parentNode.replaceChild(chartCanvas, chartImageObj);
 
         // Pull the jsPDF constructor from the window.jspdf object (required by jspdf.umd.min.js)
         const { jsPDF } = window.jspdf;
