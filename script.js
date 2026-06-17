@@ -620,3 +620,4 @@ async function generatePDFReport() {
         alert('PDF generation failed: ' + err.message);
     }
 }
+}
