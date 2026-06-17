@@ -501,12 +501,18 @@ function renderChart(timelineData) {
     });
 }
 async function generatePDFReport() {
-
     const target = document.getElementById('pdfSnapshotTarget');
     try {
+        // 1. Check if the current device is running iOS (iPhone, iPad, or iPod)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        // For iOS devices, lowering scale slightly prevents canvas allocation crashes 
+        // due to Apple's strict browser canvas memory limits.
+        const dynamicScale = isIOS ? 1.5 : 2;
 
         const fullCanvas = await html2canvas(target, {
-            scale: 2,
+            scale: dynamicScale,
             useCORS: true,
             backgroundColor: '#ffffff',
             scrollX: 0,
@@ -523,28 +529,24 @@ async function generatePDFReport() {
 
         const pdfWidth = 210;
         const pdfHeight = 297;
-
         const margin = 0;
 
         const usableWidth = pdfWidth - (margin * 2);
         const usableHeight = pdfHeight - (margin * 2);
 
-        const pageCanvasHeight =
-            Math.floor(
-                fullCanvas.width *
-                (usableHeight / usableWidth)
-            );
+        const pageCanvasHeight = Math.floor(
+            fullCanvas.width * (usableHeight / usableWidth)
+        );
 
         let pageIndex = 0;
         let renderedHeight = 0;
 
+        // Retain your multi-page calculation logic perfectly
         while (renderedHeight < fullCanvas.height) {
-
             const pageCanvas = document.createElement('canvas');
             const pageCtx = pageCanvas.getContext('2d');
 
             pageCanvas.width = fullCanvas.width;
-
             pageCanvas.height = Math.min(
                 pageCanvasHeight,
                 fullCanvas.height - renderedHeight
@@ -562,14 +564,9 @@ async function generatePDFReport() {
                 pageCanvas.height
             );
 
-            const imgData = pageCanvas.toDataURL(
-                'image/jpeg',
-                0.95
-            );
+            const imgData = pageCanvas.toDataURL('image/jpeg', 0.95);
 
-            const imgHeightMM =
-                (pageCanvas.height * usableWidth) /
-                pageCanvas.width;
+            const imgHeightMM = (pageCanvas.height * usableWidth) / pageCanvas.width;
 
             if (pageIndex > 0) {
                 pdf.addPage();
@@ -588,16 +585,26 @@ async function generatePDFReport() {
             pageIndex++;
         }
 
-        pdf.save('EV_Savings_Report.pdf');
-console.log(
-    fullCanvas.width,
-    fullCanvas.height
-);
-    } catch (err) {
+        console.log(fullCanvas.width, fullCanvas.height);
 
+        // 2. Platform-Specific Delivery Routing
+        if (isIOS) {
+            // iOS blocks standard .save() actions.
+            // Instead, generate a binary stream blob and assign a temporary local URL.
+            const blobPDF = pdf.output('blob');
+            const blobUrl = URL.createObjectURL(blobPDF);
+            
+            // Navigate the tab frame directly to the generated file preview.
+            // This displays it cleanly, letting users save/share natively using Safari UI.
+            window.location.href = blobUrl;
+        } else {
+            // Desktop and Android behavior remains fully unaffected
+            pdf.save('EV_Savings_Report.pdf');
+        }
+
+    } catch (err) {
         console.error(err);
         alert('PDF generation failed');
-
     } finally {
     }
 }
