@@ -503,12 +503,11 @@ function renderChart(timelineData) {
 async function generatePDFReport() {
     const target = document.getElementById('pdfSnapshotTarget');
     try {
-        // 1. Check if the current device is running iOS (iPhone, iPad, or iPod)
+        // 1. Detect if the device is running iOS (iPhone, iPad, or iPod)
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
                       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-        // For iOS devices, lowering scale slightly prevents canvas allocation crashes 
-        // due to Apple's strict browser canvas memory limits.
+        // Lowering scale slightly on iOS prevents Safari from crashing the canvas memory allocation limit
         const dynamicScale = isIOS ? 1.5 : 2;
 
         const fullCanvas = await html2canvas(target, {
@@ -519,6 +518,7 @@ async function generatePDFReport() {
             scrollY: 0
         });
 
+        // Pull the jsPDF constructor from the window.jspdf object (required by jspdf.umd.min.js)
         const { jsPDF } = window.jspdf;
 
         const pdf = new jsPDF({
@@ -541,7 +541,7 @@ async function generatePDFReport() {
         let pageIndex = 0;
         let renderedHeight = 0;
 
-        // Retain your multi-page calculation logic perfectly
+        // Your exact canvas chunking loop - preserved perfectly
         while (renderedHeight < fullCanvas.height) {
             const pageCanvas = document.createElement('canvas');
             const pageCtx = pageCanvas.getContext('2d');
@@ -587,24 +587,23 @@ async function generatePDFReport() {
 
         console.log(fullCanvas.width, fullCanvas.height);
 
-        // 2. Platform-Specific Delivery Routing
+        // 2. Platform-Specific Action Routing
         if (isIOS) {
-            // iOS blocks standard .save() actions.
-            // Instead, generate a binary stream blob and assign a temporary local URL.
+            // iOS blocks direct triggers like pdf.save(). 
+            // Instead, compile it to a blob and open it natively in a preview window.
             const blobPDF = pdf.output('blob');
             const blobUrl = URL.createObjectURL(blobPDF);
             
-            // Navigate the tab frame directly to the generated file preview.
-            // This displays it cleanly, letting users save/share natively using Safari UI.
+            // Redirect the window view into the PDF stream. 
+            // From here, users tap Safari's standard Share Sheet icon to "Save to Files" or share.
             window.location.href = blobUrl;
         } else {
-            // Desktop and Android behavior remains fully unaffected
+            // Unaffected desktop/Android behavior stays completely original
             pdf.save('EV_Savings_Report.pdf');
         }
 
     } catch (err) {
-        console.error(err);
-        alert('PDF generation failed');
-    } finally {
+        console.error("Detailed PDF Error:", err);
+        alert('PDF generation failed: ' + err.message);
     }
 }
