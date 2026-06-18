@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-    <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-DTZ6E85KJE"></script>
     <script>
     window.dataLayer = window.dataLayer || [];
@@ -15,11 +13,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>EV Savings Calculator | Compare Petrol, Diesel and Electric Vehicles</title>
     <meta name="description" content="Find out how much money you can save by switching from a petrol or diesel car to an electric vehicle with this simple calculator.">
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
     <script type="application/ld+json">
     {
     "@context": "https://schema.org",
@@ -37,7 +39,6 @@
     <meta property="og:url" content="https://EVSC.venumadhavpandit.com">
     <meta property="og:title" content="EV Savings Calculator - Should you switch to an Electric Vehicle? Find out in a few clicks!">
     <meta property="og:description" content="Calculate your yearly savings and break-even point when switching to an Electric Vehicle. Explore Exchange and Finance options. Tweak the values to do your own research before arriving at a buying decision.">
-    
     <meta property="og:image" content="https://EVSC.venumadhavpandit.com/assets/EV-Calculator-Thumbnail.png">
 
     <meta name="twitter:card" content="summary_large_image">
@@ -45,7 +46,6 @@
     <meta name="twitter:title" content="EV Savings Calculator - Should you switch to an Electric Vehicle? Find out in a few clicks!">
     <meta name="twitter:description" content="Calculate your yearly savings and break-even point when switching to an Electric Vehicle. Explore Exchange and Finance options. Tweak the values to do your own research before arriving at a buying decision.">
     <meta name="twitter:image" content="https://EVSC.venumadhavpandit.com/assets/EV-Calculator-Thumbnail.png">
-
 </head>
 <body>
 
@@ -81,15 +81,12 @@
             <button type="button" id="freqToggleBtn" class="capsule-tag" onclick="toggleFrequency()">weekly</button>
         </div>
 
-        <label>Driving Mix</label>
-        <div class="mix-labels">
-            <span id="cityLabel">City: 70%</span>
-            <span id="highwayLabel">Highway: 30%</span>
-        </div>
-        <div class="slider-wrapper">
-            <input type="range" id="routeSplitSlider" min="0" max="100" step="5" value="30" oninput="handleRouteSplitChange()">
-            <div class="slider-teeth"></div>
-        </div>
+        <label>Where do you plan to charge your eSUV?</label>
+        <select id="chargingMixSelect" onchange="updateCalculations()">
+            <option value="mostly_home">Mostly Home</option>
+            <option value="mostly_public">Mostly Public Charging</option>
+            <option value="mix" selected>Mix of both</option>
+        </select>
 
         <div class="toggle-container" style="margin-top: 1.5rem;">
             <label class="switch">
@@ -105,7 +102,7 @@
 
     <div class="premium-card">
         <label>Compare against</label>
-        <div class="fuel-card-container">
+        <div class="fuel-card-container" style="margin-bottom: 0;">
             <label class="fuel-choice-card selected" id="cardDiesel">
                 <input type="radio" name="fuelType" value="diesel" class="hidden-radio" checked onchange="selectFuelType('diesel')">
                 <div class="fuel-card-indicator"></div>
@@ -117,8 +114,16 @@
                 <span>Petrol vehicle</span>
             </label>
         </div>
+    </div>
 
-        <div class="section-title" style="margin-top: 2rem;">Your savings breakdown</div>
+    <div class="premium-card">
+        
+        <div id="heroSavingsCard" class="hero-savings-statement hidden">
+            💰 You save <span id="heroSavingsValue"></span> over 7 years<br>
+            <span style="font-size:0.9rem; font-weight:normal; color: #166534;">compared to a <span id="heroSavingsFuel"></span> vehicle</span>
+        </div>
+
+        <div class="section-title">Your savings breakdown</div>
         <div class="table-wrapper">
             <table class="tco-table">
                 <thead>
@@ -133,6 +138,10 @@
                     <tr><td colspan="4" style="text-align:center;">Calculating...</td></tr>
                 </tbody>
             </table>
+        </div>
+
+        <div class="info-tag-box" id="chargerInfoBox" style="margin-top: 0; margin-bottom: 1.5rem;">
+            ℹ️ Calculations are based on the No Charger variant, with a 7.2 kW charger added as an accessory.
         </div>
 
         <div class="linear-breakdown">
@@ -170,7 +179,7 @@
     <div class="premium-card">
         <div id="breakevenCard" class="hero-savings hidden">
             <div class="amount" id="breakevenVal">--</div>
-            <div class="sub-label">Break-even in <span id="breakevenSubtext">--</span></div>
+            <div class="sub-label"><span id="breakevenSubtext">Break-even in</span></div>
         </div>
 
         <div style="margin-bottom: 2rem;">
@@ -179,6 +188,11 @@
 
         <div class="edit-baselines-box">
             <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 10px;">Adjust Baseline Ex-Showroom Prices</label>
+            
+            <div class="info-tag-box" style="margin-top: 0; margin-bottom: 1rem;">
+                ℹ️ We've selected the closest comparable ICE vehicle as a starting point. Feel free to edit the price for your comparison.
+            </div>
+
             <div class="form-grid">
                 <div>
                     <label id="lblSpreadsheetIcePrice">Diesel Ex-Sh</label>
@@ -313,7 +327,7 @@
     </div>
 
     <div class="premium-card">
-        <span class="accordion-link" onclick="toggleAssumptions()">⚙️ Fine Tune Your Calculations</span>
+        <span class="accordion-link" onclick="toggleAssumptions()">⚙️ Advanced Settings</span>
         
         <div id="baselineAccordion" class="hidden advanced-settings-box">
             <p class="advanced-title">Change Fuel Prices, Running Costs & More</p>
@@ -383,6 +397,7 @@
         5. This calculator has been hosted on https://evsc.venumadhavpandit.com and is intended for informational purposes only. By using this calculator, you acknowledge and agree to the above disclaimers.
     </div>
 </div>
+
 <section class="about-project-container" aria-labelledby="about-heading">
   <div class="about-card">
     <div class="about-header">
@@ -415,6 +430,7 @@
     </div>
   </div>
 </section>
+
 <script src="script.js"></script>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };

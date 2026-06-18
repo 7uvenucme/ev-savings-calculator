@@ -41,7 +41,7 @@ window.onload = async () => {
 function populateCoreDropdowns() {
     const vSelect = document.getElementById('vehicleSelect');
     const sSelect = document.getElementById('stateSelect');
-    
+
     vSelect.innerHTML = '<option value="" disabled>Select an eSUV variant...</option>';
     sSelect.innerHTML = '<option value="" disabled>Select state...</option>';
     
@@ -77,7 +77,6 @@ function populateCoreDropdowns() {
     if (defaultVehIndex > -1) vSelect.selectedIndex = defaultVehIndex;
 
     handleVehicleChange();
-    
     // Set initial display format for raw inputs
     handleCurrencyBlur('odometerInput', false);
     handleCurrencyBlur('manualExchangeInput', false);
@@ -111,13 +110,6 @@ function selectFuelType(type) {
     handleVehicleChange();
 }
 
-function handleRouteSplitChange() {
-    const highway = document.getElementById('routeSplitSlider').value;
-    document.getElementById('cityLabel').innerText = `City: ${100 - highway}%`;
-    document.getElementById('highwayLabel').innerText = `Highway: ${highway}%`;
-    updateCalculations();
-}
-
 function toggleBusinessSection() {
     const isChecked = document.getElementById('businessPurchaseCheck').checked;
     document.getElementById('corporateTaxContainer').classList.toggle('hidden', !isChecked);
@@ -138,7 +130,6 @@ function toggleValuationPath() {
     
     const textNode = document.getElementById('exchangeValueText');
     const inputWrapper = document.getElementById('manualExchangeWrapper');
-    
     if (isManualValuationMode) {
         textNode.classList.add('hidden');
         inputWrapper.classList.remove('hidden');
@@ -200,7 +191,6 @@ function adjustCurrencyStepper(inputId, amount, useRs = true) {
 function handleVehicleChange() {
     const selectEl = document.getElementById('vehicleSelect');
     if (!selectEl.value) return;
-    
     currentSpreadsheetVehicle = JSON.parse(selectEl.value);
     const fuelType = document.querySelector('input[name="fuelType"]:checked').value;
     const iceExSh = fuelType === 'petrol' ? currentSpreadsheetVehicle.petrol_exsh_comp : currentSpreadsheetVehicle.diesel_exsh_comp;
@@ -254,14 +244,23 @@ function updateCalculations() {
     if (!currentSpreadsheetVehicle) return;
     
     const stateObj = document.getElementById('stateSelect').value ? JSON.parse(document.getElementById('stateSelect').value) : {overhead_multiplier_ice: 0.20, overhead_multiplier_ev: 0.05};
-    
     const distance = parseFloat(document.getElementById('distanceNum').value) || 0;
     const annualMileage = isMonthlyFreq ? distance * 12 : distance * 52;
-    const highwaySplit = parseFloat(document.getElementById('routeSplitSlider').value) / 100;
-    const citySplit = 1 - highwaySplit;
     
     const fuelType = document.querySelector('input[name="fuelType"]:checked').value;
     const isPetrol = (fuelType === 'petrol');
+    
+    // Evaluate Charging Scenarios
+    const chargingMix = document.getElementById('chargingMixSelect').value;
+    let homeSplit = 0.60;
+    let publicSplit = 0.40;
+    if (chargingMix === 'mostly_home') { 
+        homeSplit = 1.0; 
+        publicSplit = 0; 
+    } else if (chargingMix === 'mostly_public') { 
+        homeSplit = 0.25; 
+        publicSplit = 0.75; 
+    }
     
     const iceExShowroom = parseFloat(document.getElementById('overrideIceExPrice').value) || 0;
     const evExShowroom = parseFloat(document.getElementById('overrideEvExPrice').value) || 0;
@@ -277,31 +276,38 @@ function updateCalculations() {
     let tempEvSvcRate = parseFloat(document.getElementById('varEvSvc').value);
     let tempIceSvcRate = isPetrol ? parseFloat(document.getElementById('varPetrolSvc').value) : parseFloat(document.getElementById('varDieselSvc').value);
 
-    const blendedUnitCost = (citySplit * homeCharge) + (highwaySplit * publicCharge);
+    const blendedUnitCost = (homeSplit * homeCharge) + (publicSplit * publicCharge);
     const iceCostPerKm = (isPetrol ? petrolPrice : dieselPrice) / iceEff;
     const evCostPerKm = blendedUnitCost / evEff;
 
     const iceTaxAmt = iceExShowroom * stateObj.overhead_multiplier_ice;
     const evTaxAmt = evExShowroom * stateObj.overhead_multiplier_ev;
+    const chargerCostOnRoad = 60000 * 1.055; // 7.2 kW Charger + 5.5% tax
     
     let iceCumulative = iceExShowroom + iceTaxAmt;
-    let evCumulative = evExShowroom + evTaxAmt;
+    let evCumulative = evExShowroom + evTaxAmt + chargerCostOnRoad;
 
     const isBusiness = document.getElementById('businessPurchaseCheck').checked;
     const corpTaxRate = parseFloat(document.getElementById('corporateTaxRate').value) / 100;
     let iceWdv = iceExShowroom;
     let evWdv = evExShowroom;
     let totalCorpTaxSaved = 0;
-
+    
     let timeline = [];
     
     timeline.push({ label: "Ex-sh.", ice: iceExShowroom, ev: evExShowroom, isCumulativeCost: false, isSeparator: false });
     timeline.push({ label: "Road Tax, Ins. & other charges", ice: iceTaxAmt, ev: evTaxAmt, isCumulativeCost: false, isSeparator: false });
+    timeline.push({ label: "7.2 kW Charger Accessory", ice: 0, ev: chargerCostOnRoad, isCumulativeCost: false, isSeparator: false });
     timeline.push({ label: "Day 0 Upfront Cost", ice: iceCumulative, ev: evCumulative, isCumulativeCost: true, isSeparator: true });
 
-    let totalIceFuelSpent = 0; let totalEvEnergySpent = 0;
+    let totalIceFuelSpent = 0;
+    let totalEvEnergySpent = 0;
     let totalIceSvcSpent = 0; let totalEvSvcSpent = 0;
+    
     let breakevenYear = null;
+    if (evCumulative <= iceCumulative) {
+        breakevenYear = 0;
+    }
 
     for (let year = 1; year <= 7; year++) {
         let yrIceFuel = annualMileage * iceCostPerKm;
@@ -342,7 +348,7 @@ function updateCalculations() {
 
         tempEvSvcRate *= 1.05;
         tempIceSvcRate *= 1.20;
-
+        
         if (evCumulative <= iceCumulative && breakevenYear === null) {
             let prevYearIce = iceCumulative - (yrIceFuel + yrIceSvc) + (isBusiness ? (iceWdv/0.85)*0.15*corpTaxRate : 0);
             let prevYearEv = evCumulative - (yrEvEnergy + yrEvSvc) + (isBusiness ? (evWdv/0.60)*0.40*corpTaxRate : 0);
@@ -363,12 +369,12 @@ function updateCalculations() {
     }
 
     const exShowroomPremium = iceExShowroom - evExShowroom; 
-    const taxSavings = iceTaxAmt - evTaxAmt; 
+    const taxSavings = iceTaxAmt - evTaxAmt;
     const fuelSavings = totalIceFuelSpent - totalEvEnergySpent;
     const serviceSavings = totalIceSvcSpent - totalEvSvcSpent;
     const netTcoResult = exShowroomPremium + taxSavings + fuelSavings + serviceSavings + totalCorpTaxSaved;
-
-    renderTableAndLedger(timeline, { exShowroomPremium, taxSavings, fuelSavings, serviceSavings, totalCorpTaxSaved, netTcoResult }, breakevenYear);
+    
+    renderTableAndLedger(timeline, { exShowroomPremium, taxSavings, fuelSavings, serviceSavings, totalCorpTaxSaved, netTcoResult }, breakevenYear, fuelType);
     renderChart(timeline);
 
     // EXCHANGE & FINANCE LOGIC
@@ -389,12 +395,12 @@ function updateCalculations() {
     }
     
     document.getElementById('exchangeValueText').innerText = formatEnIn(finalTradeInEquity);
-
+    
     const rawDownpaymentAmt = parseFloat(document.getElementById('downPaymentInput').value) || 0;
     const tenureYears = parseInt(document.getElementById('loanTenure').value);
     const interestRateVal = parseFloat(document.getElementById('interestRate').value);
     
-    const evOnRoadTotal = evExShowroom + evTaxAmt;
+    const evOnRoadTotal = evExShowroom + evTaxAmt + chargerCostOnRoad;
     const evPrincipal = Math.max(0, evOnRoadTotal - rawDownpaymentAmt - finalTradeInEquity);
     
     const monthlyRate = (interestRateVal / 100) / 12;
@@ -410,36 +416,46 @@ function updateCalculations() {
 }
 
 // RENDERERS
-function renderTableAndLedger(timeline, ledger, breakevenYear) {
+function renderTableAndLedger(timeline, ledger, breakevenYear, fuelType) {
     const tbody = document.getElementById('tcoTableBody');
     tbody.innerHTML = '';
+    
     timeline.forEach(row => {
         const tr = document.createElement('tr');
-        let iceClass = ''; let evClass = ''; let marginText = '';
+        let iceStyle = ''; let evStyle = ''; let marginText = '';
 
         if (row.ice > row.ev) {
-            evClass = 'class="leader-green"';
-            marginText = `<span class="val-positive">Save ${formatToLakhsString(row.ice - row.ev)}</span>`;
+            evStyle = 'background-color: #f0fdf4; border-radius: 6px;';
+            marginText = `<span class="val-positive">₹${((row.ice - row.ev)/100000).toFixed(2)} L saved</span>`;
         } else if (row.ev > row.ice) {
-            iceClass = 'class="leader-green"';
-            marginText = `<span class="val-negative">Prem. ${formatToLakhsString(row.ev - row.ice)}</span>`;
+            iceStyle = 'background-color: #f0fdf4; border-radius: 6px;';
+            marginText = `<span class="val-negative">₹${((row.ev - row.ice)/100000).toFixed(2)} L more</span>`;
         } else {
             marginText = '-';
         }
 
-        // Apply thick border for Day 0 separation without adding a blank row
         if (row.isSeparator) {
             tr.style.borderBottom = "2px solid #9ca3af";
         }
 
         tr.innerHTML = `
             <td><strong>${row.label}</strong></td>
-            <td ${iceClass}>${formatToLakhsString(row.ice)}${row.noteIce || ""}</td>
-            <td ${evClass}>${formatToLakhsString(row.ev)}${row.noteEv || ""}</td>
+            <td style="${iceStyle}">${formatToLakhsString(row.ice)}${row.noteIce || ""}</td>
+            <td style="${evStyle}">${formatToLakhsString(row.ev)}${row.noteEv || ""}</td>
             <td><strong>${marginText}</strong></td>
         `;
         tbody.appendChild(tr);
     });
+
+    // Hero Savings Render
+    const heroCard = document.getElementById('heroSavingsCard');
+    if (ledger.netTcoResult > 0) {
+        heroCard.classList.remove('hidden');
+        document.getElementById('heroSavingsValue').innerText = "₹ " + (ledger.netTcoResult / 100000).toFixed(2) + " Lakh";
+        document.getElementById('heroSavingsFuel').innerText = fuelType;
+    } else {
+        heroCard.classList.add('hidden');
+    }
 
     const ledgerEx = document.getElementById('ledgerExEx');
     if (ledger.exShowroomPremium < 0) {
@@ -460,13 +476,16 @@ function renderTableAndLedger(timeline, ledger, breakevenYear) {
     document.getElementById('ledgerTotal').innerText = formatEnIn(Math.round(ledger.netTcoResult));
 
     const bCard = document.getElementById('breakevenCard');
-    if (breakevenYear && breakevenYear <= 7 && breakevenYear > 0) {
+    if (breakevenYear === 0) {
+        bCard.classList.remove('hidden');
+        document.getElementById('breakevenVal').innerText = "0.0 Years";
+        document.getElementById('breakevenSubtext').innerText = "Break-even immediately";
+    } else if (breakevenYear && breakevenYear <= 7 && breakevenYear > 0) {
         bCard.classList.remove('hidden');
         document.getElementById('breakevenVal').innerText = breakevenYear.toFixed(1) + " Years";
-        
         let yearsStr = Math.floor(breakevenYear);
         let monthsStr = Math.round((breakevenYear - yearsStr) * 12);
-        document.getElementById('breakevenSubtext').innerText = `${yearsStr} years ${monthsStr} months`;
+        document.getElementById('breakevenSubtext').innerText = `Break-even in ${yearsStr} years ${monthsStr} months`;
     } else {
         bCard.classList.add('hidden');
     }
@@ -500,6 +519,7 @@ function renderChart(timelineData) {
         }
     });
 }
+
 async function generatePDFReport() {
     const target = document.getElementById('pdfSnapshotTarget');
     if (!target) {
@@ -511,46 +531,36 @@ async function generatePDFReport() {
         let chartCanvas = null;
         let chartImageObj = null;
 
-        // 1. Find your Chart instance and convert it into a static image
-        // Note: Make sure 'myChart' matches the exact variable name of your Chart.js instance
-        if (window.myChart) {
-            chartCanvas = document.getElementById('yourChartCanvasId'); // Put your actual canvas ID here
+        if (window.chart) {
+            chartCanvas = document.getElementById('tcoChart');
             
             if (chartCanvas) {
                 chartImageObj = new Image();
-                // Convert the chart to a safe, local base64 data string
-                chartImageObj.src = window.myChart.toBase64Image();
+                chartImageObj.src = window.chart.toBase64Image();
                 chartImageObj.style.width = chartCanvas.offsetWidth + 'px';
                 chartImageObj.style.height = chartCanvas.offsetHeight + 'px';
-                
-                // Temporarily swap the live canvas with the safe image element
                 chartCanvas.parentNode.replaceChild(chartImageObj, chartCanvas);
             }
         }
 
-        // Define dynamicScale if it's not declared globally
         const scaleValue = typeof dynamicScale !== 'undefined' ? dynamicScale : 2;
 
-        // 2. Capture the element using html2canvas
         const fullCanvas = await html2canvas(target, {
             scale: scaleValue,
-            useCORS: true,                 // Crucial for loading external images/CDNs
-            allowTaint: false,              // CRITICAL: Prevent tainted canvases from breaking export
-            foreignObjectRendering: false,  // Forces a standard render path, safer for Safari/iOS
+            useCORS: true,
+            allowTaint: false,
+            foreignObjectRendering: false,
             backgroundColor: '#ffffff',
             scrollX: 0,
             scrollY: 0,
-            logging: false                  // Keeps your console clean
+            logging: false
         });
 
-        // 3. Swap it back so the interactive chart returns after the PDF builds
         if (chartCanvas && chartImageObj && chartImageObj.parentNode) {
             chartImageObj.parentNode.replaceChild(chartCanvas, chartImageObj);
         }
 
-        // Pull the jsPDF constructor from the window.jspdf object
         const { jsPDF } = window.jspdf;
-
         const pdf = new jsPDF({
             orientation: 'portrait',
             unit: 'mm',
@@ -560,7 +570,6 @@ async function generatePDFReport() {
         const pdfWidth = 210;
         const pdfHeight = 297;
         const margin = 0;
-
         const usableWidth = pdfWidth - (margin * 2);
         const usableHeight = pdfHeight - (margin * 2);
 
@@ -571,7 +580,6 @@ async function generatePDFReport() {
         let pageIndex = 0;
         let renderedHeight = 0;
 
-        // Canvas chunking loop
         while (renderedHeight < fullCanvas.height) {
             const pageCanvas = document.createElement('canvas');
             const pageCtx = pageCanvas.getContext('2d');
@@ -601,32 +609,18 @@ async function generatePDFReport() {
                 pdf.addPage();
             }
 
-            pdf.addImage(
-                imgData,
-                'JPEG',
-                margin,
-                margin,
-                usableWidth,
-                imgHeightMM
-            );
-
+            pdf.addImage(imgData, 'JPEG', margin, margin, usableWidth, imgHeightMM);
             renderedHeight += pageCanvas.height;
             pageIndex++;
         }
 
-        console.log("Canvas dimensions captured:", fullCanvas.width, fullCanvas.height);
-
-        // Detect iOS platform safely if not globally declared
         const iosCheck = typeof isIOS !== 'undefined' ? isIOS : /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-        // 4. Platform-Specific Action Routing
         if (iosCheck) {
-            // iOS blocks direct triggers like pdf.save(). Compile to blob & preview natively.
             const blobPDF = pdf.output('blob');
             const blobUrl = URL.createObjectURL(blobPDF);
             window.location.href = blobUrl;
         } else {
-            // Unaffected desktop/Android behavior stays completely original
             pdf.save('EV_Savings_Report.pdf');
         }
 
